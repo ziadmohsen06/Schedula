@@ -13,6 +13,7 @@ import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import StreakPage from './pages/StreakPage';
 import CurrentTasksPage from './pages/CurrentTasksPage';
+import CalendarPage from './pages/CalendarPage';
 
 const PrivateRoute = ({ children }) => {
   const { user } = useAuth();
@@ -49,6 +50,9 @@ function App() {
           } />
           <Route path="/current-tasks" element={
             <PrivateRoute><CurrentTasksPage /></PrivateRoute>
+          } />
+          <Route path="/calendar" element={
+            <PrivateRoute><CalendarPage /></PrivateRoute>
           } />
           <Route path="/" element={<Navigate to="/login" />} />
         </Routes>

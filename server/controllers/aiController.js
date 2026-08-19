@@ -3,6 +3,7 @@ dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 const { CohereClient } = require('cohere-ai');
 const Task = require('../models/Task');
+const User = require('../models/User');
 const { logAuditEvent } = require('../utils/audit');
 
 const scheduleTask = async (req, res) => {
@@ -21,6 +22,21 @@ const scheduleTask = async (req, res) => {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
+    // Get user's daily start preference
+    const user = await User.findById(req.user._id);
+    const startPreference = user.dailyStartPreference || 'flexible';
+
+    const startHourMap = {
+      early: 8,
+      mid: 10,
+      late: 12,
+      flexible: 9
+    };
+
+    const startHour = startHourMap[startPreference];
+    const dailyHours = startPreference === 'early' ? 8 : 
+                       startPreference === 'late' ? 6 : 7;
+
     const today = new Date().toISOString().split('T')[0];
     const deadline = new Date(task.deadline).toISOString().split('T')[0];
 
@@ -36,6 +52,8 @@ Total hours needed: ${task.estimatedHours}
 Start date: ${today}
 Deadline: ${deadline}
 Priority: ${task.priority}
+User prefers to start at: ${startHour}:00
+Daily working hours: ${dailyHours}
 
 Return ONLY a JSON array, no other text:
 [{"date":"YYYY-MM-DD","hoursPerDay":2,"focus":"what to do"}]

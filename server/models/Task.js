@@ -36,6 +36,18 @@ const TaskSchema = new mongoose.Schema({
     type: Number,
     default: 1
   },
+  tags: [{
+    type: String,
+    enum: ['University', 'Work', 'Personal', 'Gym', 'Errands', 'Other'],
+    default: ['Other']
+  }],
+  notes: [{
+    text: String,
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   scheduledDays: [
     {
       date: Date,

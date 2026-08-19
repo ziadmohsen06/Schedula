@@ -1,30 +1,39 @@
 const express = require('express');
 const router = express.Router();
-const protect = require('../middleware/authMiddleware');
-const { register, login, logout, forgotPassword, resetPassword, changePassword, updateProfile } = require('../controllers/authController');
-const multer = require('multer');
-const path = require('path');
+const authController = require('../controllers/authController');
+const authMiddleware = require('../middleware/authMiddleware');
 
-const storage = multer.diskStorage({
-	destination: function (req, file, cb) {
-		cb(null, path.join(__dirname, '..', 'uploads'));
-	},
-	filename: function (req, file, cb) {
-		const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-		const ext = path.extname(file.originalname);
-		cb(null, `${unique}${ext}`);
-	}
-});
+// Fix: Check how protect is exported
+const protect = authMiddleware.protect || authMiddleware;
 
-const upload = multer({ storage });
+// Log what we're getting
+console.log('authMiddleware type:', typeof authMiddleware);
+console.log('authMiddleware keys:', Object.keys(authMiddleware));
+console.log('protect type:', typeof protect);
 
+const { 
+  register, 
+  login, 
+  logout, 
+  forgotPassword, 
+  resetPassword, 
+  changePassword, 
+  updateProfile,
+  getDailyPreference,
+  updateDailyPreference
+} = authController;
+
+// Public routes
 router.post('/register', register);
 router.post('/login', login);
-router.post('/logout', protect, logout);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
+
+// Protected routes
+router.post('/logout', protect, logout);
 router.post('/change-password', protect, changePassword);
-// Allow multipart/form-data for profile updates (file + fields)
-router.put('/profile', protect, upload.single('photo'), updateProfile);
+router.put('/profile', protect, updateProfile);
+router.get('/daily-preference', protect, getDailyPreference);
+router.put('/daily-preference', protect, updateDailyPreference);
 
 module.exports = router;

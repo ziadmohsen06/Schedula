@@ -63,6 +63,7 @@ const register = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      dailyStartPreference: user.dailyStartPreference,
       token: generateToken(user._id)
     });
   } catch (error) {
@@ -94,6 +95,7 @@ const login = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      dailyStartPreference: user.dailyStartPreference,
       token: generateToken(user._id)
     });
   } catch (error) {
@@ -129,11 +131,114 @@ const forgotPassword = async (req, res) => {
       await user.save();
 
       try {
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
+                await transporter.sendMail({
+          from: `"Schedula Garden" <${process.env.EMAIL_USER}>`,
           to: user.email,
-          subject: 'Schedula Password Reset OTP',
-          text: `Your OTP is ${otp}. It expires in 10 minutes.`
+          subject: '🌿 Your Schedula Password Reset Code',
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+                body {
+                  font-family: 'Inter', Arial, sans-serif;
+                  background-color: #F4FAF3;
+                  margin: 0;
+                  padding: 0;
+                }
+                .container {
+                  max-width: 500px;
+                  margin: 40px auto;
+                  background: #FCFFFC;
+                  border-radius: 20px;
+                  overflow: hidden;
+                  box-shadow: 0 10px 40px rgba(63, 143, 90, 0.15);
+                }
+                .header {
+                  background: linear-gradient(135deg, #69C37D 0%, #3F8F5A 100%);
+                  padding: 40px 30px;
+                  text-align: center;
+                  position: relative;
+                }
+                .header h1 {
+                  color: white;
+                  margin: 10px 0 0 0;
+                  font-size: 28px;
+                  font-weight: 700;
+                }
+                .header p {
+                  color: rgba(255, 255, 255, 0.9);
+                  margin: 5px 0 0 0;
+                  font-size: 14px;
+                }
+                .leaf-icon {
+                  font-size: 50px;
+                  display: block;
+                }
+                .content {
+                  padding: 40px 30px;
+                }
+                .otp-box {
+                  background: linear-gradient(135deg, #F4FAF3 0%, #E8F5E9 100%);
+                  border: 2px dashed #69C37D;
+                  border-radius: 15px;
+                  padding: 20px;
+                  text-align: center;
+                  margin: 20px 0;
+                }
+                .otp-code {
+                  font-size: 36px;
+                  font-weight: 700;
+                  color: #3F8F5A;
+                  letter-spacing: 8px;
+                  margin: 0;
+                }
+                .info-text {
+                  color: #6C7A6D;
+                  font-size: 14px;
+                  line-height: 1.6;
+                  margin: 15px 0;
+                }
+                .footer {
+                  text-align: center;
+                  padding: 20px;
+                  color: #6C7A6D;
+                  font-size: 12px;
+                  border-top: 1px solid #E0E0E0;
+                }
+                .highlight {
+                  color: #3F8F5A;
+                  font-weight: 600;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <span class="leaf-icon">🌿</span>
+                  <h1>Schedula</h1>
+                  <p>Your Productivity Garden</p>
+                </div>
+                <div class="content">
+                  <p class="info-text">Hi <strong>${user.name}</strong>,</p>
+                  <p class="info-text">We received a request to reset your password. Use the code below to complete the process:</p>
+                  
+                  <div class="otp-box">
+                    <p class="otp-code">${otp}</p>
+                  </div>
+                  
+                  <p class="info-text">This code will expire in <span class="highlight">10 minutes</span> for security reasons.</p>
+                  <p class="info-text">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
+                </div>
+                <div class="footer">
+                  <p>🌱 Grow every day with Schedula</p>
+                  <p>© 2026 Schedula. All rights reserved.</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          `
         });
 
         console.log(`OTP sent to ${user.email}`);
@@ -274,4 +379,68 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { register, login, logout, forgotPassword, resetPassword, changePassword, updateProfile };
+// NEW: Get daily preference
+const getDailyPreference = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const today = new Date().toDateString();
+    const lastUpdate = user.lastStartPreferenceUpdate 
+      ? new Date(user.lastStartPreferenceUpdate).toDateString() 
+      : null;
+
+    res.json({
+      dailyStartPreference: user.dailyStartPreference,
+      shouldPrompt: lastUpdate !== today,
+      lastStartPreferenceUpdate: user.lastStartPreferenceUpdate
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to process request' });
+  }
+};
+
+// NEW: Update daily preference
+const updateDailyPreference = async (req, res) => {
+  try {
+    const { preference } = req.body;
+
+    if (!['early', 'mid', 'late', 'flexible'].includes(preference)) {
+      return res.status(400).json({ message: 'Invalid preference' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        dailyStartPreference: preference,
+        lastStartPreferenceUpdate: new Date(),
+        hasSeenDailyPrompt: true
+      },
+      { new: true }
+    );
+
+    await logAuditEvent(req.user._id, 'updated daily preference', req);
+
+    res.json({
+      success: true,
+      dailyStartPreference: user.dailyStartPreference,
+      lastStartPreferenceUpdate: user.lastStartPreferenceUpdate
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to process request' });
+  }
+};
+
+module.exports = { 
+  register, 
+  login, 
+  logout, 
+  forgotPassword, 
+  resetPassword, 
+  changePassword, 
+  updateProfile,
+  getDailyPreference,
+  updateDailyPreference
+};

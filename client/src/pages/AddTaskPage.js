@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container, Box, Typography, Button, TextField, FormControl,
-  InputLabel, Select, MenuItem, Alert
+  InputLabel, Select, MenuItem, Alert, Chip, OutlinedInput
 } from '@mui/material';
 import { createTask, scheduleTask } from '../services/api';
 import AppShell from '../components/AppShell';
+
+const TAGS = ['University', 'Work', 'Personal', 'Gym', 'Errands', 'Other'];
 
 const AddTaskPage = () => {
   const navigate = useNavigate();
@@ -14,6 +16,7 @@ const AddTaskPage = () => {
   const [deadline, setDeadline] = useState('');
   const [priority, setPriority] = useState('medium');
   const [estimatedHours, setEstimatedHours] = useState(1);
+  const [tags, setTags] = useState(['Other']);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -47,7 +50,8 @@ const AddTaskPage = () => {
         description,
         deadline,
         priority,
-        estimatedHours: Number(estimatedHours || 1)
+        estimatedHours: Number(estimatedHours || 1),
+        tags
       };
 
       const { data } = await createTask(payload);
@@ -62,6 +66,7 @@ const AddTaskPage = () => {
       setDeadline('');
       setPriority('medium');
       setEstimatedHours(1);
+      setTags(['Other']);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to add task');
     }
@@ -81,10 +86,12 @@ const AddTaskPage = () => {
         <Box component="form" onSubmit={handleAddTask} sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 3, border: '1px solid #e0e0e0', borderRadius: 2 }}>
           <TextField label="Title" fullWidth value={title} onChange={(e) => setTitle(e.target.value)} required />
           <TextField label="Description" fullWidth multiline rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+          
           <Box>
             <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary' }}>Deadline</Typography>
             <TextField type="date" fullWidth value={deadline} onChange={(e) => setDeadline(e.target.value)} inputProps={{ min: getTodayString() }} required />
           </Box>
+          
           <Box sx={{ display: 'flex', gap: 2 }}>
             <FormControl fullWidth>
               <InputLabel>Priority</InputLabel>
@@ -97,6 +104,30 @@ const AddTaskPage = () => {
             </FormControl>
             <TextField label="Estimated Hours" type="number" fullWidth value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} inputProps={{ min: 1 }} />
           </Box>
+          
+          <FormControl fullWidth>
+            <InputLabel>Tags</InputLabel>
+            <Select
+              multiple
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              input={<OutlinedInput label="Tags" />}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {selected.map((value) => (
+                    <Chip key={value} label={value} size="small" />
+                  ))}
+                </Box>
+              )}
+            >
+              {TAGS.map((tag) => (
+                <MenuItem key={tag} value={tag}>
+                  {tag}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
           <Button type="submit" variant="contained" size="large">Add Task</Button>
         </Box>
       </Container>

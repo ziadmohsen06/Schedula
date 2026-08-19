@@ -45,6 +45,19 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  dailyStartPreference: {
+    type: String,
+    enum: ['early', 'mid', 'late', 'flexible'],
+    default: 'flexible'
+  },
+  lastStartPreferenceUpdate: {
+    type: Date,
+    default: null
+  },
+  hasSeenDailyPrompt: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now

@@ -9,69 +9,170 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 
 const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
   const sections = [
-    { id: 'home', label: 'Home', description: 'Go back to the main dashboard', icon: <HomeIcon sx={{ color: '#9c27b0' }} /> },
-    { id: 'current', label: 'Current Tasks', description: 'Active tasks sorted by priority', icon: <TaskAltIcon sx={{ color: '#1976d2' }} /> },
-    { id: 'calendar', label: 'Calendar', description: 'View tasks on a daily timeline', icon: <CalendarMonthIcon sx={{ color: '#0097a7' }} /> },
-    { id: 'history', label: 'History', description: 'Completed tasks and past progress', icon: <HistoryIcon sx={{ color: '#388e3c' }} /> },
-    { id: 'streak', label: 'Streak', description: 'Fire streak calendar', icon: <LocalFireDepartmentIcon sx={{ color: '#ff6f00' }} /> }
+    {
+      id: 'home',
+      label: '🏡 Home',
+      description: 'Go back to the main dashboard',
+      icon: <HomeIcon sx={{ color: '#9c27b0' }} />
+    },
+    {
+      id: 'current',
+      label: '🌱 Current Tasks',
+      description: 'Active tasks sorted by priority',
+      icon: <TaskAltIcon sx={{ color: '#69C37D' }} />
+    },
+    {
+      id: 'calendar',
+      label: '📅 Calendar',
+      description: 'View tasks on a daily timeline',
+      icon: <CalendarMonthIcon sx={{ color: '#0097a7' }} />
+    },
+    {
+      id: 'history',
+      label: '📜 History',
+      description: 'Completed tasks and past progress',
+      icon: <HistoryIcon sx={{ color: '#388e3c' }} />
+    },
+    {
+      id: 'streak',
+      label: '🔥 Streak',
+      description: 'Your garden and streak progress',
+      icon: <LocalFireDepartmentIcon sx={{ color: '#ff6f00' }} />
+    }
   ];
 
   return (
     <Box
       sx={{
-        width: 360,
-        p: 2,
-        bgcolor: darkMode ? '#1e1e1e' : '#fff',
-        color: darkMode ? '#fff' : '#000',
-        height: '100%'
+        width: 320,
+        p: 0,
+        bgcolor: darkMode ? '#162418' : '#FCFFFC',
+        color: darkMode ? '#d4edda' : '#2E4634',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column'
       }}
       role="presentation"
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography
-          variant="h6"
-          sx={{ cursor: 'pointer', color: darkMode ? '#fff' : '#000' }}
-          onClick={() => onSelect('home')}
+      {/* Header */}
+      <Box sx={{
+        p: 2.5,
+        pb: 1.5,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderBottom: `1px solid ${darkMode ? 'rgba(105,195,125,0.15)' : 'rgba(105,195,125,0.2)'}`,
+        background: darkMode
+          ? 'linear-gradient(135deg, #1a3320 0%, #162418 100%)'
+          : 'linear-gradient(135deg, #f0faf0 0%, #FCFFFC 100%)'
+      }}>
+        <Box>
+          <Typography
+            variant="h6"
+            fontWeight={700}
+            sx={{
+              cursor: 'pointer',
+              color: darkMode ? '#69C37D' : '#3F8F5A',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5
+            }}
+            onClick={() => onSelect('home')}
+          >
+            🌿 Schedula
+          </Typography>
+          <Typography variant="caption" sx={{ color: darkMode ? '#8fac93' : '#6C7A6D' }}>
+            Your Productivity Garden
+          </Typography>
+        </Box>
+        <IconButton
+          size="small"
+          onClick={onClose}
+          sx={{
+            color: darkMode ? '#8fac93' : '#6C7A6D',
+            '&:hover': { bgcolor: darkMode ? 'rgba(105,195,125,0.1)' : 'rgba(105,195,125,0.1)', color: '#69C37D' }
+          }}
         >
-          Quick Access
-        </Typography>
-        <IconButton size="small" onClick={onClose} sx={{ color: darkMode ? '#fff' : '#000' }}>
-          <CloseIcon />
+          <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
 
-      <List>
-        {sections.map((section) => (
+      {/* Nav items */}
+      <List sx={{ flex: 1, pt: 1, px: 1 }}>
+        {sections.map((section, index) => (
           <React.Fragment key={section.id}>
             <ListItemButton
               onClick={() => onSelect(section.id)}
-              sx={{ borderRadius: 1, '&:hover': { bgcolor: darkMode ? '#2a2a2a' : '#f5f5f5' } }}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                py: 1.2,
+                px: 1.5,
+                animation: `fadeSlideIn 0.3s ease forwards`,
+                animationDelay: `${index * 0.05}s`,
+                opacity: 0,
+                '@keyframes fadeSlideIn': {
+                  from: { opacity: 0, transform: 'translateX(-12px)' },
+                  to: { opacity: 1, transform: 'translateX(0)' }
+                },
+                '&:hover': {
+                  bgcolor: darkMode ? 'rgba(105,195,125,0.1)' : 'rgba(105,195,125,0.08)',
+                  transform: 'translateX(4px)',
+                  transition: 'all 0.2s ease'
+                },
+                transition: 'all 0.2s ease'
+              }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, width: '100%' }}>
-                {section.icon}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                <Box sx={{ fontSize: 22 }}>{section.icon}</Box>
                 <ListItemText
                   primary={section.label}
                   secondary={section.description}
-                  primaryTypographyProps={{ color: darkMode ? '#fff' : '#000' }}
-                  secondaryTypographyProps={{ color: darkMode ? '#aaa' : 'text.secondary' }}
+                  primaryTypographyProps={{
+                    fontWeight: 600,
+                    fontSize: 14,
+                    color: darkMode ? '#d4edda' : '#2E4634'
+                  }}
+                  secondaryTypographyProps={{
+                    fontSize: 12,
+                    color: darkMode ? '#8fac93' : '#6C7A6D'
+                  }}
                 />
               </Box>
             </ListItemButton>
-            <Divider sx={{ borderColor: darkMode ? '#333' : '#e0e0e0' }} />
           </React.Fragment>
         ))}
       </List>
 
+      {/* Bottom tip card */}
       <Box sx={{
-        mt: 2, p: 2, borderRadius: 2,
-        bgcolor: darkMode ? '#2a1a00' : '#fff7e6',
-        border: `1px solid ${darkMode ? '#7a4500' : '#ffd08a'}`
+        m: 2,
+        p: 2,
+        borderRadius: 3,
+        background: darkMode
+          ? 'linear-gradient(135deg, #2a1a00 0%, #1a1200 100%)'
+          : 'linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%)',
+        border: `1px solid ${darkMode ? '#7a4500' : '#F6C453'}`,
+        position: 'relative',
+        overflow: 'hidden'
       }}>
-        <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 0.8, color: darkMode ? '#ffb74d' : '#b25f00' }}>
-          <LocalFireDepartmentIcon sx={{ color: '#ff6f00' }} /> Tip
+        <Typography
+          variant="subtitle2"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.8,
+            color: darkMode ? '#ffb74d' : '#b25f00',
+            fontWeight: 700
+          }}
+        >
+          🌱 Garden Tip
         </Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: darkMode ? '#aaa' : 'text.secondary' }}>
-          Keep your momentum going. Complete tasks daily to grow your flame.
+        <Typography variant="body2" sx={{ mt: 0.8, color: darkMode ? '#aaa' : '#6C7A6D', fontSize: 12 }}>
+          Complete tasks daily to keep your plant growing. Consistency is the key to a thriving garden!
+        </Typography>
+        <Typography sx={{ position: 'absolute', bottom: 4, right: 8, fontSize: 32, opacity: 0.12 }}>
+          🌻
         </Typography>
       </Box>
     </Box>
