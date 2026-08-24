@@ -8,12 +8,15 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cron = require('node-cron');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const twoFactorRoutes = require('./routes/twoFactorRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const digestRoutes = require('./routes/digestRoutes');
+const { sendWeeklyDigests } = require('./utils/digest');
 
 connectDB();
 
@@ -58,10 +61,16 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/2fa', twoFactorRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/digest', digestRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Schedula API is running' });
 });
+
+// Weekly digest: every Sunday at 8am
+cron.schedule('0 8 * * 0', () => {
+  sendWeeklyDigests().catch(err => console.error('Weekly digest cron failed:', err.message));
+}, { timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
 
 const PORT = process.env.PORT || 5000;
 

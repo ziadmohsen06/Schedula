@@ -38,9 +38,13 @@ const TaskSchema = new mongoose.Schema({
   },
   tags: [{
     type: String,
-    enum: ['University', 'Work', 'Personal', 'Gym', 'Errands', 'Other'],
+    enum: ['University', 'School', 'Test', 'Work', 'Personal', 'Gym', 'Errands', 'Other'],
     default: ['Other']
   }],
+  lessonCount: {
+    type: Number,
+    min: 1
+  },
   notes: [{
     text: String,
     createdAt: {
@@ -55,6 +59,15 @@ const TaskSchema = new mongoose.Schema({
       focus: String
     }
   ],
+  recurrence: {
+    frequency: {
+      type: String,
+      enum: ['daily', 'weekly', 'monthly'],
+    },
+    groupId: {
+      type: mongoose.Schema.Types.ObjectId
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now

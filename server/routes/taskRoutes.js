@@ -1,8 +1,19 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Task = require('../models/Task');
-const authMiddleware = require('../middleware/authMiddleware');
-const protect = authMiddleware.protect || authMiddleware;
+const protect = require('../middleware/authMiddleware');
+
+const MAX_RECURRING_OCCURRENCES = 12;
+const RECURRENCE_FREQUENCIES = ['daily', 'weekly', 'monthly'];
+
+const addInterval = (date, frequency) => {
+  const d = new Date(date);
+  if (frequency === 'daily') d.setDate(d.getDate() + 1);
+  else if (frequency === 'weekly') d.setDate(d.getDate() + 7);
+  else if (frequency === 'monthly') d.setMonth(d.getMonth() + 1);
+  return d;
+};
 
 // Get all active tasks
 router.get('/', protect, async (req, res) => {
@@ -54,22 +65,50 @@ router.get('/history', protect, async (req, res) => {
 // Create task
 router.post('/', protect, async (req, res) => {
   try {
-    const { title, description, deadline, priority, estimatedHours, tags } = req.body;
-    
+    const { title, description, deadline, priority, estimatedHours, tags, lessonCount, recurrence } = req.body;
+
     if (!title || !deadline) {
       return res.status(400).json({ message: 'Please provide title and deadline' });
     }
-    
-    const task = await Task.create({
+
+    const baseData = {
       user: req.user._id,
       title,
       description,
-      deadline,
       priority: priority || 'medium',
       estimatedHours: estimatedHours || 1,
       tags: tags || ['Other']
-    });
-    
+    };
+
+    if (lessonCount && Number(lessonCount) > 0) {
+      baseData.lessonCount = Number(lessonCount);
+    }
+
+    if (recurrence && RECURRENCE_FREQUENCIES.includes(recurrence.frequency)) {
+      const groupId = new mongoose.Types.ObjectId();
+      const endDate = recurrence.endDate ? new Date(recurrence.endDate) : null;
+
+      const occurrenceDates = [];
+      let current = new Date(deadline);
+      while (occurrenceDates.length < MAX_RECURRING_OCCURRENCES) {
+        if (endDate && current > endDate) break;
+        occurrenceDates.push(new Date(current));
+        current = addInterval(current, recurrence.frequency);
+      }
+
+      const tasks = await Task.create(
+        occurrenceDates.map(date => ({
+          ...baseData,
+          deadline: date,
+          recurrence: { frequency: recurrence.frequency, groupId }
+        }))
+      );
+
+      return res.status(201).json({ tasks, count: tasks.length });
+    }
+
+    const task = await Task.create({ ...baseData, deadline });
+
     res.status(201).json(task);
   } catch (error) {
     res.status(500).json({ message: 'Failed to create task' });
@@ -88,9 +127,17 @@ router.delete('/:id', protect, async (req, res) => {
     if (task.user.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Not authorized' });
     }
-    
+
+    if (req.query.series === 'true' && task.recurrence?.groupId) {
+      const result = await Task.deleteMany({
+        user: req.user._id,
+        'recurrence.groupId': task.recurrence.groupId
+      });
+      return res.status(200).json({ message: `Deleted ${result.deletedCount} tasks in series` });
+    }
+
     await Task.findByIdAndDelete(req.params.id);
-    
+
     res.status(200).json({ message: 'Task deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete task' });

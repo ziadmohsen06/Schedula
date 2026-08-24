@@ -35,9 +35,10 @@ export const updateDailyPreference = (preference) => API.put('/auth/daily-prefer
 export const getTasks = () => API.get('/tasks');
 export const getCompletedTasks = (params) => API.get('/tasks/history', { params });
 export const createTask = (data) => API.post('/tasks', data);
-export const deleteTask = (id) => API.delete(`/tasks/${id}`);
+export const deleteTask = (id, { series } = {}) => API.delete(`/tasks/${id}`, { params: series ? { series: true } : undefined });
 export const completeTask = (id) => API.patch(`/tasks/${id}/complete`);
 export const rescheduleTask = (id, data) => API.patch(`/tasks/${id}/reschedule`, data);
 export const scheduleTask = (id) => API.post(`/ai/schedule/${id}`);
 export const addTaskNote = (id, text) => API.post(`/tasks/${id}/notes`, { text });
 export const sendChatCommand = (message) => API.post('/chat/command', { message });
+export const sendTestDigest = () => API.post('/digest/test');

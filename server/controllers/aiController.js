@@ -6,6 +6,52 @@ const Task = require('../models/Task');
 const User = require('../models/User');
 const { logAuditEvent } = require('../utils/audit');
 
+const toLocalISODate = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+// Deterministically spreads `lessonCount` study sessions across the days between
+// now and the deadline, splitting estimatedHours evenly per lesson. Used instead
+// of the AI scheduler when the task specifies a lesson/lecture count.
+const distributeLessons = (lessonCount, estimatedHours, deadline) => {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(deadline);
+  end.setHours(0, 0, 0, 0);
+
+  const totalDays = Math.max(1, Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1);
+  const days = Math.min(totalDays, lessonCount);
+  const lessonsPerDay = Math.ceil(lessonCount / days);
+  const hoursPerLesson = estimatedHours / lessonCount;
+
+  const scheduledDays = [];
+  let lessonsScheduled = 0;
+
+  for (let d = 0; d < days && lessonsScheduled < lessonCount; d++) {
+    const lessonsToday = Math.min(lessonsPerDay, lessonCount - lessonsScheduled);
+    const date = new Date(start);
+    date.setDate(date.getDate() + d);
+
+    const firstLesson = lessonsScheduled + 1;
+    const lastLesson = lessonsScheduled + lessonsToday;
+
+    scheduledDays.push({
+      date: toLocalISODate(date),
+      hoursPerDay: Number((hoursPerLesson * lessonsToday).toFixed(1)),
+      focus: lessonsToday > 1
+        ? `Lessons ${firstLesson}-${lastLesson} of ${lessonCount}`
+        : `Lesson ${firstLesson} of ${lessonCount}`
+    });
+
+    lessonsScheduled += lessonsToday;
+  }
+
+  return scheduledDays;
+};
+
 const scheduleTask = async (req, res) => {
   const cohere = new CohereClient({
     token: process.env.COHERE_API_KEY
@@ -42,7 +88,9 @@ const scheduleTask = async (req, res) => {
 
     let scheduledDays = [];
 
-    try {
+    if (task.lessonCount && task.lessonCount > 0) {
+      scheduledDays = distributeLessons(task.lessonCount, task.estimatedHours, task.deadline);
+    } else try {
       if (process.env.COHERE_API_KEY) {
         const response = await cohere.chat({
           model: 'command-r7b-12-2024',

@@ -5,6 +5,60 @@ const { CohereClient } = require('cohere-ai');
 const Task = require('../models/Task');
 const { logAuditEvent } = require('../utils/audit');
 
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const VALID_TAGS = ['University', 'Work', 'Personal', 'Gym', 'Errands', 'Other'];
+
+// YYYY-MM-DD in local time. Using toISOString() here would convert to UTC and
+// silently shift the date by a day depending on the server's timezone offset.
+const toLocalISODate = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+// Finds a relative date phrase ("tomorrow", "thursday", "next friday", "in 3 days")
+// and returns the resolved Date plus the matched text so it can be stripped from the title.
+const parseRelativeDate = (message) => {
+  const lower = message.toLowerCase();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (/\btomorrow\b/.test(lower)) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    return { date: d, matched: 'tomorrow' };
+  }
+
+  if (/\btoday\b/.test(lower)) {
+    return { date: new Date(today), matched: 'today' };
+  }
+
+  const inDaysMatch = lower.match(/\bin (\d+) days?\b/);
+  if (inDaysMatch) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + parseInt(inDaysMatch[1], 10));
+    return { date: d, matched: inDaysMatch[0] };
+  }
+
+  const weekdayMatch = lower.match(/\b(next )?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  if (weekdayMatch) {
+    const isNext = !!weekdayMatch[1];
+    const targetDay = WEEKDAYS.indexOf(weekdayMatch[2]);
+    let diff = (targetDay - today.getDay() + 7) % 7;
+    if (diff === 0) {
+      diff = isNext ? 7 : 0;
+    } else if (isNext) {
+      diff += 7;
+    }
+    const d = new Date(today);
+    d.setDate(d.getDate() + diff);
+    return { date: d, matched: weekdayMatch[0] };
+  }
+
+  return null;
+};
+
 const parseChatCommand = async (req, res) => {
   try {
     const { message } = req.body;
@@ -14,33 +68,33 @@ const parseChatCommand = async (req, res) => {
     }
 
     // Fetch ALL tasks for this user (not just active)
-    const tasks = await Task.find({ 
+    const tasks = await Task.find({
       user: req.user._id
     }).sort({ createdAt: 1 });
-
-    console.log('Found tasks:', tasks.length, tasks.map(t => ({ title: t.title, status: t.status })));
 
     // Filter out completed tasks if status exists
     const activeTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'done');
 
-    console.log('Active tasks:', activeTasks.length);
-
     // DIRECT PARSING FIRST
     let parsedAction = parseSimpleCommand(message, activeTasks);
-    console.log('Parsed action:', parsedAction);
 
     // If direct parsing failed, try AI
     if (!parsedAction || parsedAction.action === 'unknown') {
       try {
         if (process.env.COHERE_API_KEY) {
           const cohere = new CohereClient({ token: process.env.COHERE_API_KEY });
+          const today = new Date().toISOString().split('T')[0];
           const response = await cohere.chat({
             model: 'command-r7b-12-2024',
-            message: `Parse this command: "${message}"
-Tasks: ${JSON.stringify(activeTasks.map((t, i) => ({ index: i + 1, title: t.title, priority: t.priority })))}
-Return JSON: {"action": "...", "taskIndex": number, "taskTitle": "...", "newPriority": "..."}`
+            message: `Today's date is ${today}. Parse this command: "${message}"
+Existing tasks: ${JSON.stringify(activeTasks.map((t, i) => ({ index: i + 1, title: t.title, priority: t.priority })))}
+Return ONLY JSON matching one of these shapes, no other text:
+{"action":"change_priority","taskIndex":number,"newPriority":"low|medium|high|urgent"}
+{"action":"delete_task","taskIndex":number}
+{"action":"create_task","title":"...","deadline":"YYYY-MM-DD","tags":["University"|"Work"|"Personal"|"Gym"|"Errands"|"Other"],"newPriority":"low|medium|high|urgent"}
+{"action":"unknown"}`
           });
-          
+
           const text = response.text;
           const jsonMatch = text.match(/\{[\s\S]*?\}/);
           if (jsonMatch) {
@@ -85,6 +139,9 @@ Return JSON: {"action": "...", "taskIndex": number, "taskTitle": "...", "newPrio
       case 'reschedule_all':
         result = await rescheduleAllTasks(req.user._id, parsedAction);
         break;
+      case 'create_task':
+        result = await createTaskFromChat(req.user._id, parsedAction);
+        break;
       default:
         result = { message: 'Command not recognized. Try "show tasks" to see all tasks.' };
     }
@@ -120,12 +177,46 @@ const parseSimpleCommand = (message, tasks) => {
   if (lowerMessage.includes('overdue') || lowerMessage.includes('late')) {
     return { action: 'list_overdue' };
   }
-  
+
+  // Create task ("I have an exam Thursday", "add task submit report due Friday")
+  // Anchored to the start of the message (after stripping polite prefixes) so it
+  // doesn't collide with questions like "what do I have today?".
+  const strippedMessage = lowerMessage.replace(/^(can you |please |could you )+/, '');
+  const createTriggers = /^(i have|add (a )?task|new task|create task|remind me (to|about))\b/;
+  if (createTriggers.test(strippedMessage)) {
+    const dateInfo = parseRelativeDate(message);
+    if (dateInfo) {
+      let title = message
+        .replace(/\b(can you|please)\b/gi, '')
+        .replace(/\b(i have (an?)\s+|i have\s+|add (a )?task(:| to| for)?\s*|new task(:| to| for)?\s*|create task(:| to| for)?\s*|remind me (to|about)\s+)/gi, '')
+        .replace(new RegExp(`\\b(due |on |by |this |next )?${dateInfo.matched}\\b`, 'i'), '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^(an?|to|for)\s+/i, '')
+        .trim();
+
+      if (title) {
+        title = title.charAt(0).toUpperCase() + title.slice(1);
+
+        const isAcademic = /\b(exam|test|quiz|lecture|lesson|class|assignment|homework|study|university|school|midterm|final)\b/.test(lowerMessage);
+        const isUrgent = /\b(exam|test|final|midterm|urgent)\b/.test(lowerMessage);
+
+        return {
+          action: 'create_task',
+          title,
+          deadline: toLocalISODate(dateInfo.date),
+          tags: [isAcademic ? 'University' : 'Other'],
+          newPriority: isUrgent ? 'high' : 'medium'
+        };
+      }
+    }
+  }
+
   // What do I have today/tomorrow
   if (lowerMessage.includes('today') || lowerMessage.includes('tomorrow') || lowerMessage.includes('this week')) {
     return { action: 'query_schedule' };
   }
-  
+
   // Move everything to next week
   if (lowerMessage.includes('next week') || lowerMessage.includes('move everything') || lowerMessage.includes('push back')) {
     return {
@@ -133,7 +224,7 @@ const parseSimpleCommand = (message, tasks) => {
       newStartDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     };
   }
-  
+
   // Change priority
   if (lowerMessage.includes('priority') || (lowerMessage.includes('change') && lowerMessage.includes('to'))) {
     const priorityMatch = lowerMessage.match(/(low|medium|high|urgent)/);
@@ -346,6 +437,30 @@ const querySchedule = async (userId) => {
       deadline: new Date(t.deadline).toLocaleDateString(),
       priority: t.priority
     }))
+  };
+};
+
+const createTaskFromChat = async (userId, action) => {
+  if (!action.title || !action.deadline || isNaN(new Date(action.deadline).getTime())) {
+    return {
+      message: '❌ I couldn\'t figure out the task title or date. Try something like "I have an exam Thursday" or "add task submit report due Friday".'
+    };
+  }
+
+  const tags = Array.isArray(action.tags)
+    ? action.tags.filter(t => VALID_TAGS.includes(t))
+    : [];
+
+  const task = await Task.create({
+    user: userId,
+    title: action.title,
+    deadline: new Date(action.deadline),
+    priority: ['low', 'medium', 'high', 'urgent'].includes(action.newPriority) ? action.newPriority : 'medium',
+    tags: tags.length ? tags : ['Other']
+  });
+
+  return {
+    message: `✅ Added task "${task.title}" due ${new Date(task.deadline).toLocaleDateString()}`
   };
 };
 

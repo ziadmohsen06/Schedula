@@ -2,27 +2,17 @@ const dns = require('dns');
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
 const { logAuditEvent, logLoginAuditEvent } = require('../utils/audit');
+const { transporter } = require('../utils/email');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '30d'
   });
 };
-
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: Number(process.env.EMAIL_PORT || 587),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
 
 const register = async (req, res) => {
   try {

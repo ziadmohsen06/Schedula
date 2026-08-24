@@ -241,7 +241,7 @@ const Dashboard = () => {
       case 'deadline': return copy.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
       default: return copy;
     }
-  };
+  }
     const sortedTasks = getSortedTasks();
   const topTask = tasks.reduce((best, task) => {
     if (!best) return task;

@@ -7,7 +7,8 @@ import {
 import { createTask, scheduleTask } from '../services/api';
 import AppShell from '../components/AppShell';
 
-const TAGS = ['University', 'Work', 'Personal', 'Gym', 'Errands', 'Other'];
+const TAGS = ['University', 'School', 'Test', 'Work', 'Personal', 'Gym', 'Errands', 'Other'];
+const STUDY_TAGS = ['University', 'School', 'Test'];
 
 const AddTaskPage = () => {
   const navigate = useNavigate();
@@ -17,8 +18,13 @@ const AddTaskPage = () => {
   const [priority, setPriority] = useState('medium');
   const [estimatedHours, setEstimatedHours] = useState(1);
   const [tags, setTags] = useState(['Other']);
+  const [lessonCount, setLessonCount] = useState('');
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState('none');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const isStudyTask = tags.some((tag) => STUDY_TAGS.includes(tag));
 
   const getTodayString = () => {
     const today = new Date();
@@ -54,19 +60,39 @@ const AddTaskPage = () => {
         tags
       };
 
-      const { data } = await createTask(payload);
-      try {
-        await scheduleTask(data._id);
-      } catch (scheduleErr) {
-        // ignore schedule errors; task creation still succeeded
+      if (isStudyTask && Number(lessonCount) > 0) {
+        payload.lessonCount = Number(lessonCount);
       }
-      setSuccess('Task added successfully. AI scheduling has been prepared.');
+
+      if (recurrenceFrequency !== 'none') {
+        payload.recurrence = { frequency: recurrenceFrequency };
+        if (recurrenceEndDate) {
+          payload.recurrence.endDate = recurrenceEndDate;
+        }
+      }
+
+      const { data } = await createTask(payload);
+
+      if (data._id) {
+        try {
+          await scheduleTask(data._id);
+        } catch (scheduleErr) {
+          // ignore schedule errors; task creation still succeeded
+        }
+        setSuccess('Task added successfully. AI scheduling has been prepared.');
+      } else {
+        setSuccess(`${data.count} recurring tasks added successfully.`);
+      }
+
       setTitle('');
       setDescription('');
       setDeadline('');
       setPriority('medium');
       setEstimatedHours(1);
       setTags(['Other']);
+      setLessonCount('');
+      setRecurrenceFrequency('none');
+      setRecurrenceEndDate('');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to add task');
     }
@@ -127,7 +153,41 @@ const AddTaskPage = () => {
               ))}
             </Select>
           </FormControl>
-          
+
+          {isStudyTask && (
+            <TextField
+              label="Number of lessons/lectures to study"
+              type="number"
+              fullWidth
+              value={lessonCount}
+              onChange={(e) => setLessonCount(e.target.value)}
+              inputProps={{ min: 1 }}
+              helperText="We'll split your estimated hours evenly across this many study sessions"
+            />
+          )}
+
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Repeat</InputLabel>
+              <Select value={recurrenceFrequency} label="Repeat" onChange={(e) => setRecurrenceFrequency(e.target.value)}>
+                <MenuItem value="none">Does not repeat</MenuItem>
+                <MenuItem value="daily">Daily</MenuItem>
+                <MenuItem value="weekly">Weekly</MenuItem>
+                <MenuItem value="monthly">Monthly</MenuItem>
+              </Select>
+            </FormControl>
+            {recurrenceFrequency !== 'none' && (
+              <TextField
+                label="Repeat until (optional)"
+                type="date"
+                fullWidth
+                value={recurrenceEndDate}
+                onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                inputProps={{ min: deadline || getTodayString() }}
+              />
+            )}
+          </Box>
+
           <Button type="submit" variant="contained" size="large">Add Task</Button>
         </Box>
       </Container>

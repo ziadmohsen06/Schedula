@@ -1,17 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const authMiddleware = require('../middleware/authMiddleware');
+const protect = require('../middleware/authMiddleware');
 
-// Fix: Check how protect is exported
-const protect = authMiddleware.protect || authMiddleware;
-
-// Log what we're getting
-console.log('authMiddleware type:', typeof authMiddleware);
-console.log('authMiddleware keys:', Object.keys(authMiddleware));
-console.log('protect type:', typeof protect);
-
-const { 
+const {
   register, 
   login, 
   logout, 
