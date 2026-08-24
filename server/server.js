@@ -30,13 +30,19 @@ connectDB();
 
 const app = express();
 
+// Render (and most PaaS hosts) sit behind a reverse proxy, always sending
+// X-Forwarded-For. Without this, express-rate-limit throws a validation
+// error on every request, and req.ip/req.protocol report the proxy's own
+// connection instead of the real client's.
+app.set('trust proxy', 1);
+
 // Security HTTP headers
 app.use(helmet());
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
   message: { message: 'Too many requests, please try again after 15 minutes' }
 });
 app.use('/api/', limiter);
