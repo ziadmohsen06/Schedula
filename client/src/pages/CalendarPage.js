@@ -8,7 +8,10 @@ import {
 } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
-import { getTasks, scheduleTask, rescheduleTask, setTaskScheduleHour } from '../services/api';
+import { getTasks, scheduleTask, rescheduleTask, setTaskScheduleHour, getClassSchedule, getAssignments, getGoals } from '../services/api';
+import SchoolIcon from '@mui/icons-material/School';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import FlagIcon from '@mui/icons-material/Flag';
 import AppShell from '../components/AppShell';
 import { useThemeName } from '../hooks/useThemeName';
 import { getThemeContent } from '../themeContent';
@@ -56,6 +59,9 @@ const CalendarPage = () => {
   const themeName = useThemeName();
   const content = getThemeContent(themeName);
   const [tasks, setTasks] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [milestones, setMilestones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedTask, setSelectedTask] = useState(null);
@@ -84,6 +90,9 @@ const CalendarPage = () => {
   useEffect(() => {
     if (!user) return navigate('/login');
     fetchTasks();
+    fetchClasses();
+    fetchAssignments();
+    fetchGoalMilestones();
   }, [user, navigate]);
 
   const fetchTasks = async () => {
@@ -95,6 +104,62 @@ const CalendarPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchClasses = async () => {
+    try {
+      const { data } = await getClassSchedule();
+      setClasses(data);
+    } catch (err) {
+      // non-critical overlay; fail silently
+    }
+  };
+
+  const fetchAssignments = async () => {
+    try {
+      const { data } = await getAssignments();
+      setAssignments(data.filter((a) => a.status !== 'graded'));
+    } catch (err) {
+      // non-critical overlay; fail silently
+    }
+  };
+
+  const fetchGoalMilestones = async () => {
+    try {
+      const { data: goals } = await getGoals();
+      const flat = goals.flatMap((goal) =>
+        goal.milestones
+          .filter((m) => !m.completed && m.targetDate)
+          .map((m) => ({ _id: m._id, title: m.title, goalTitle: goal.title, targetDate: m.targetDate }))
+      );
+      setMilestones(flat);
+    } catch (err) {
+      // non-critical overlay; fail silently
+    }
+  };
+
+  const isSameDate = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const getAssignmentsForDate = (date) =>
+    assignments.filter((a) => isSameDate(new Date(a.deadline), date));
+
+  const getMilestonesForDate = (date) =>
+    milestones.filter((m) => isSameDate(new Date(m.targetDate), date));
+
+  const timeToHourFloat = (time) => {
+    const [h, m] = time.split(':').map(Number);
+    return h + m / 60;
+  };
+
+  const getClassesForDateAndHour = (date, hour) => {
+    const dow = date.getDay();
+    return classes.filter((c) => {
+      if (c.dayOfWeek !== dow) return false;
+      const start = timeToHourFloat(c.startTime);
+      const end = timeToHourFloat(c.endTime);
+      return hour < end && hour + 1 > start;
+    });
   };
 
   const getTasksForDateAndHour = (date, hour) => {
@@ -128,8 +193,12 @@ const CalendarPage = () => {
     e.dataTransfer.setData('application/json', JSON.stringify({ taskId: task._id, dateStr }));
   };
 
-  const handleDropOnHour = async (e, hour) => {
+  const handleDropOnHour = async (e, hour, date) => {
     e.preventDefault();
+    if (date && getClassesForDateAndHour(date, hour).length > 0) {
+      setError('That time slot overlaps a class — pick a different hour.');
+      return;
+    }
     try {
       const { taskId, dateStr } = JSON.parse(e.dataTransfer.getData('application/json'));
       const { data } = await setTaskScheduleHour(taskId, dateStr, hour);
@@ -376,6 +445,44 @@ const CalendarPage = () => {
                 ))}
               </Box>
 
+              {/* All-day row: assignment/milestone deadlines, not tied to an hour */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '80px repeat(7, 1fr)', gap: 1, mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', pr: 1 }}>
+                  <Typography variant="caption" color="text.secondary" fontWeight="bold">Due</Typography>
+                </Box>
+                {weekDates.map((date, dayIndex) => {
+                  const dayAssignments = getAssignmentsForDate(date);
+                  const dayMilestones = getMilestonesForDate(date);
+                  if (dayAssignments.length === 0 && dayMilestones.length === 0) return <Box key={dayIndex} />;
+                  return (
+                    <Box key={dayIndex} sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
+                      {dayAssignments.map((a) => (
+                        <Chip
+                          key={a._id}
+                          icon={<AssignmentIcon sx={{ fontSize: 12 }} />}
+                          label={a.title}
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          sx={{ height: 18, fontSize: 9, '& .MuiChip-label': { px: 0.5 } }}
+                        />
+                      ))}
+                      {dayMilestones.map((m) => (
+                        <Chip
+                          key={m._id}
+                          icon={<FlagIcon sx={{ fontSize: 12 }} />}
+                          label={m.title}
+                          size="small"
+                          color="secondary"
+                          variant="outlined"
+                          sx={{ height: 18, fontSize: 9, '& .MuiChip-label': { px: 0.5 } }}
+                        />
+                      ))}
+                    </Box>
+                  );
+                })}
+              </Box>
+
               {/* Time Rows */}
               {HOURS.map((hour) => (
                 <Box
@@ -402,19 +509,22 @@ const CalendarPage = () => {
                   {/* Day Cells */}
                   {weekDates.map((date, dayIndex) => {
                     const dayTasks = getTasksForDateAndHour(date, hour);
+                    const dayClasses = getClassesForDateAndHour(date, hour);
                     return (
                       <Box
                         key={dayIndex}
                         className="week-cell"
                         onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => handleDropOnHour(e, hour)}
+                        onDrop={(e) => handleDropOnHour(e, hour, date)}
                         sx={{
                           minHeight: 60,
                           p: 0.5,
                           borderRadius: 1,
-                          bgcolor: dayTasks.length > 0
-                            ? getTaskColors(dayTasks[0].priority).bg
-                            : 'action.hover',
+                          bgcolor: dayClasses.length > 0
+                            ? 'action.selected'
+                            : dayTasks.length > 0
+                              ? getTaskColors(dayTasks[0].priority).bg
+                              : 'action.hover',
                           border: `1px solid ${dayTasks.length > 0
                             ? getTaskColors(dayTasks[0].priority).border
                             : theme.palette.divider}`,
@@ -423,10 +533,20 @@ const CalendarPage = () => {
                           gap: 0.5,
                         }}
                       >
+                        {dayClasses.map((c) => (
+                          <Box key={c._id} sx={{ display: 'flex', alignItems: 'center', gap: 0.3, opacity: 0.8 }}>
+                            <SchoolIcon sx={{ fontSize: 10, color: 'text.secondary' }} />
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, fontStyle: 'italic' }} noWrap>
+                              {c.courseName}
+                            </Typography>
+                          </Box>
+                        ))}
                         {dayTasks.length === 0 ? (
-                          <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9 }}>
-                            —
-                          </Typography>
+                          dayClasses.length === 0 && (
+                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9 }}>
+                              —
+                            </Typography>
+                          )
                         ) : (
                           dayTasks.map((task, taskIndex) => (
                             <Card
@@ -485,8 +605,19 @@ const CalendarPage = () => {
             <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
               {formatFullDate(new Date())}
             </Typography>
+            {(getAssignmentsForDate(new Date()).length > 0 || getMilestonesForDate(new Date()).length > 0) && (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+                {getAssignmentsForDate(new Date()).map((a) => (
+                  <Chip key={a._id} icon={<AssignmentIcon />} label={`${a.title} due`} color="warning" variant="outlined" size="small" />
+                ))}
+                {getMilestonesForDate(new Date()).map((m) => (
+                  <Chip key={m._id} icon={<FlagIcon />} label={`${m.title} due`} color="secondary" variant="outlined" size="small" />
+                ))}
+              </Box>
+            )}
             {HOURS.map((hour) => {
               const todayTasks = getTasksForDateAndHour(new Date(), hour);
+              const todayClasses = getClassesForDateAndHour(new Date(), hour);
               return (
                 <Box key={hour} sx={{ display: 'flex', gap: 2, mb: 1 }}>
                   <Box sx={{ width: 80, textAlign: 'right', pr: 1 }}>
@@ -496,17 +627,25 @@ const CalendarPage = () => {
                   </Box>
                   <Box
                     onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => handleDropOnHour(e, hour)}
+                    onDrop={(e) => handleDropOnHour(e, hour, new Date())}
                     sx={{
                       flex: 1,
                       minHeight: 60,
                       p: 1,
                       borderRadius: 1,
-                      bgcolor: 'action.hover',
+                      bgcolor: todayClasses.length > 0 ? 'action.selected' : 'action.hover',
                       border: '1px solid', borderColor: 'divider'
                     }}>
+                    {todayClasses.map((c) => (
+                      <Box key={c._id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5, opacity: 0.8 }}>
+                        <SchoolIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                        <Typography variant="caption" color="text.secondary" fontStyle="italic">
+                          {c.courseName} (class)
+                        </Typography>
+                      </Box>
+                    ))}
                     {todayTasks.length === 0 ? (
-                      <Typography variant="caption" color="text.disabled">—</Typography>
+                      todayClasses.length === 0 && <Typography variant="caption" color="text.disabled">—</Typography>
                     ) : (
                       todayTasks.map((task) => (
                         <Card

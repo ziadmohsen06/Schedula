@@ -22,10 +22,18 @@ import GoalsPage from './pages/GoalsPage';
 import HabitsPage from './pages/HabitsPage';
 import WeeklyReviewPage from './pages/WeeklyReviewPage';
 import SocialPage from './pages/SocialPage';
+import TimerPage from './pages/TimerPage';
+import LandingPage from './pages/LandingPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 const PrivateRoute = ({ children }) => {
   const { user } = useAuth();
   return user ? children : <Navigate to="/login" />;
+};
+
+const RootRoute = () => {
+  const { user } = useAuth();
+  return user ? <Navigate to="/dashboard" /> : <LandingPage />;
 };
 
 function App() {
@@ -86,7 +94,11 @@ function App() {
           <Route path="/social" element={
             <PrivateRoute><SocialPage /></PrivateRoute>
           } />
-          <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="/timer" element={
+            <PrivateRoute><TimerPage /></PrivateRoute>
+          } />
+          <Route path="/" element={<RootRoute />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Router>
     </AuthProvider>

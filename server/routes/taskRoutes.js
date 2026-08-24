@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const Task = require('../models/Task');
+const Assignment = require('../models/Assignment');
+const Goal = require('../models/Goal');
 const protect = require('../middleware/authMiddleware');
 
 const MAX_RECURRING_OCCURRENCES = 12;
@@ -264,11 +266,22 @@ router.get('/weekly-review', protect, async (req, res) => {
     const now = new Date();
     const weekAgo = new Date(now);
     weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAhead = new Date(now);
+    weekAhead.setDate(weekAhead.getDate() + 7);
 
-    const [completed, missed] = await Promise.all([
+    const [completed, missed, missedAssignments, upcomingAssignments, goals] = await Promise.all([
       Task.find({ user: req.user._id, status: 'completed', completedAt: { $gte: weekAgo } }).sort({ completedAt: -1 }),
-      Task.find({ user: req.user._id, status: { $ne: 'completed' }, deadline: { $lt: now, $gte: weekAgo } }).sort({ deadline: -1 })
+      Task.find({ user: req.user._id, status: { $ne: 'completed' }, deadline: { $lt: now, $gte: weekAgo } }).sort({ deadline: -1 }),
+      Assignment.find({ user: req.user._id, status: { $ne: 'graded' }, deadline: { $lt: now, $gte: weekAgo } }).sort({ deadline: -1 }),
+      Assignment.find({ user: req.user._id, status: { $ne: 'graded' }, deadline: { $gte: now, $lt: weekAhead } }).sort({ deadline: 1 }),
+      Goal.find({ user: req.user._id, 'milestones.completed': false, 'milestones.targetDate': { $gte: now, $lt: weekAhead } })
     ]);
+
+    const upcomingMilestones = goals.flatMap((goal) =>
+      goal.milestones
+        .filter((m) => !m.completed && m.targetDate && m.targetDate >= now && m.targetDate < weekAhead)
+        .map((m) => ({ _id: m._id, goalTitle: goal.title, title: m.title, targetDate: m.targetDate }))
+    ).sort((a, b) => new Date(a.targetDate) - new Date(b.targetDate));
 
     const completedCount = completed.length;
     const missedCount = missed.length;
@@ -285,6 +298,9 @@ router.get('/weekly-review', protect, async (req, res) => {
     } else {
       suggestion = `${missedCount} tasks slipped this week versus ${completedCount} completed. Consider fewer, smaller tasks or enabling Lazy Mode next week.`;
     }
+    if (missedAssignments.length > 0) {
+      suggestion += ` Also, ${missedAssignments.length} assignment${missedAssignments.length === 1 ? '' : 's'} passed its deadline unsubmitted — check in with your instructor if needed.`;
+    }
 
     res.status(200).json({
       completedCount,
@@ -292,6 +308,9 @@ router.get('/weekly-review', protect, async (req, res) => {
       completionRate,
       completed: completed.map((t) => ({ _id: t._id, title: t.title, completedAt: t.completedAt })),
       missed: missed.map((t) => ({ _id: t._id, title: t.title, deadline: t.deadline })),
+      missedAssignments: missedAssignments.map((a) => ({ _id: a._id, title: a.title, courseName: a.courseName, deadline: a.deadline })),
+      upcomingAssignments: upcomingAssignments.map((a) => ({ _id: a._id, title: a.title, courseName: a.courseName, deadline: a.deadline })),
+      upcomingMilestones,
       suggestion
     });
   } catch (error) {

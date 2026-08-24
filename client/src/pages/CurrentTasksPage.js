@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container, Box, Typography, Card, CardContent, CardActions,
-  Chip, Button, Alert, CircularProgress, Dialog, DialogTitle,
+  Chip, Button, Alert, Skeleton, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, MenuItem, Select,
   FormControl, InputLabel, Collapse, Paper
 } from '@mui/material';
@@ -277,7 +277,21 @@ const CurrentTasksPage = () => {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         {loading ? (
-          <CircularProgress />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {[0, 1, 2].map((i) => (
+              <Card key={i}>
+                <CardContent>
+                  <Skeleton variant="text" width="45%" height={32} />
+                  <Skeleton variant="text" width="70%" sx={{ mt: 1 }} />
+                  <Skeleton variant="text" width="35%" />
+                </CardContent>
+                <CardActions>
+                  <Skeleton variant="rounded" width={70} height={30} />
+                  <Skeleton variant="rounded" width={90} height={30} />
+                </CardActions>
+              </Card>
+            ))}
+          </Box>
         ) : sortedTasks.length === 0 && searchQuery ? (
           <Alert severity="info">No tasks found matching "{searchQuery}"</Alert>
         ) : sortedTasks.length === 0 ? (

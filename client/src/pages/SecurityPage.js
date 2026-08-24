@@ -4,7 +4,7 @@ import {
   Container, Box, Typography, Button, Paper, Divider, Chip,
   LinearProgress, List, ListItem, ListItemText, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  CircularProgress
+  Skeleton
 } from '@mui/material';
 import ShieldIcon from '@mui/icons-material/Shield';
 import DevicesIcon from '@mui/icons-material/Devices';
@@ -118,8 +118,19 @@ const SecurityPage = () => {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress />
+          <Box>
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Skeleton variant="text" width="30%" height={32} />
+              <Skeleton variant="rounded" height={10} sx={{ my: 2 }} />
+              <Skeleton variant="text" width="60%" />
+              <Skeleton variant="text" width="50%" />
+            </Paper>
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Skeleton variant="text" width="35%" height={32} sx={{ mb: 2 }} />
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} variant="rounded" height={56} sx={{ mb: 1 }} />
+              ))}
+            </Paper>
           </Box>
         ) : (
           <>

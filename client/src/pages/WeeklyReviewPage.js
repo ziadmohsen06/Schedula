@@ -67,7 +67,7 @@ const WeeklyReviewPage = () => {
               )}
             </Paper>
 
-            <Paper sx={{ p: 3 }}>
+            <Paper sx={{ p: 3, mb: 3 }}>
               <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>⚠️ Missed this week</Typography>
               {review.missed.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">Nothing missed — great week!</Typography>
@@ -82,6 +82,46 @@ const WeeklyReviewPage = () => {
                 </List>
               )}
             </Paper>
+
+            {review.missedAssignments?.length > 0 && (
+              <Paper sx={{ p: 3, mb: 3 }}>
+                <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>📝 Assignments past deadline</Typography>
+                <List disablePadding>
+                  {review.missedAssignments.map((a) => (
+                    <ListItem key={a._id} disableGutters>
+                      <ListItemText primary={`${a.title} (${a.courseName})`} secondary={`Was due ${new Date(a.deadline).toLocaleDateString()}`} />
+                      <Chip label="Unsubmitted" size="small" color="error" />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            )}
+
+            {review.upcomingAssignments?.length > 0 && (
+              <Paper sx={{ p: 3, mb: 3 }}>
+                <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>📆 Assignments due next week</Typography>
+                <List disablePadding>
+                  {review.upcomingAssignments.map((a) => (
+                    <ListItem key={a._id} disableGutters>
+                      <ListItemText primary={`${a.title} (${a.courseName})`} secondary={`Due ${new Date(a.deadline).toLocaleDateString()}`} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            )}
+
+            {review.upcomingMilestones?.length > 0 && (
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>🎯 Goal milestones due next week</Typography>
+                <List disablePadding>
+                  {review.upcomingMilestones.map((m) => (
+                    <ListItem key={m._id} disableGutters>
+                      <ListItemText primary={`${m.title} (${m.goalTitle})`} secondary={`Due ${new Date(m.targetDate).toLocaleDateString()}`} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            )}
           </>
         )}
       </Container>

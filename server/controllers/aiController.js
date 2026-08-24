@@ -5,7 +5,20 @@ const { CohereClient } = require('cohere-ai');
 const Task = require('../models/Task');
 const User = require('../models/User');
 const ClassSlot = require('../models/ClassSlot');
+const Assignment = require('../models/Assignment');
+const Goal = require('../models/Goal');
 const { logAuditEvent } = require('../utils/audit');
+
+// A same-day mood check-in nudges scheduling to be gentler — fewer hours to
+// pack into a stressed/tired day, and a lower bar before the burnout warning
+// fires — instead of only coloring the Dashboard's briefing text.
+const moodCapacityAdjustment = (user) => {
+  const checkIn = user.lastMoodCheckIn;
+  if (!checkIn?.mood || checkIn.date !== toLocalISODate(new Date())) return 0;
+  if (checkIn.mood === 'stressed') return -2;
+  if (checkIn.mood === 'tired') return -1;
+  return 0;
+};
 
 const timeToMinutes = (time) => {
   const [h, m] = time.split(':').map(Number);
@@ -21,6 +34,35 @@ const classHoursByWeekday = (classSlots) => {
     hoursByDay.set(slot.dayOfWeek, (hoursByDay.get(slot.dayOfWeek) || 0) + hours);
   });
   return hoursByDay;
+};
+
+const PRIORITY_HOUR_MAP = { urgent: 8, high: 10, medium: 13, low: 16 };
+
+const isHourBusy = (hour, dayClasses) => dayClasses.some((c) => {
+  const start = timeToMinutes(c.startTime) / 60;
+  const end = timeToMinutes(c.endTime) / 60;
+  return hour < end && hour + 1 > start;
+});
+
+// Picks an hour (7-20, matching the calendar's hour grid) for a scheduled day
+// that doesn't fall inside any of the user's classes that weekday, searching
+// outward from the priority-based preferred hour so the AI-picked slot still
+// leans toward the same time-of-day it would have used anyway. Returns null
+// if every hour that day is class time — the calendar then falls back to its
+// existing priority-hour default, same as any other unscheduled-hour task.
+const findFreeHour = (date, classSlots, priority) => {
+  const dow = date.getDay();
+  const dayClasses = classSlots.filter((c) => c.dayOfWeek === dow);
+  const preferred = PRIORITY_HOUR_MAP[priority] || 13;
+  if (dayClasses.length === 0) return preferred;
+  if (!isHourBusy(preferred, dayClasses)) return preferred;
+
+  for (let offset = 1; offset <= 13; offset++) {
+    for (const h of [preferred - offset, preferred + offset]) {
+      if (h >= 7 && h <= 20 && !isHourBusy(h, dayClasses)) return h;
+    }
+  }
+  return null;
 };
 
 const toLocalISODate = (date) => {
@@ -178,8 +220,9 @@ const scheduleTask = async (req, res) => {
     };
 
     const startHour = startHourMap[startPreference];
-    const dailyHours = startPreference === 'early' ? 8 : 
+    const baseDailyHours = startPreference === 'early' ? 8 :
                        startPreference === 'late' ? 6 : 7;
+    const dailyHours = Math.max(2, baseDailyHours + moodCapacityAdjustment(user));
 
     const today = new Date().toISOString().split('T')[0];
     const deadline = new Date(task.deadline).toISOString().split('T')[0];
@@ -232,7 +275,11 @@ Total hours across all days must equal ${task.estimatedHours}.`
         focus: index === 0 ? 'Focus on the highest-priority work' : 'Continue steadily'
       }));
     }
-    task.scheduledDays = scheduledDays;
+    const classSlots = await ClassSlot.find({ user: req.user._id });
+    task.scheduledDays = scheduledDays.map((day) => ({
+      ...day,
+      hour: findFreeHour(new Date(day.date), classSlots, task.priority)
+    }));
     await task.save();
 
     await logAuditEvent(req.user._id, 'task scheduled with AI', req);
@@ -252,7 +299,8 @@ const getWorkloadInsights = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     const startPreference = user.dailyStartPreference || 'flexible';
-    const dailyCapacity = startPreference === 'early' ? 8 : startPreference === 'late' ? 6 : 7;
+    const baseDailyCapacity = startPreference === 'early' ? 8 : startPreference === 'late' ? 6 : 7;
+    const dailyCapacity = Math.max(2, baseDailyCapacity + moodCapacityAdjustment(user));
 
     const tasks = await Task.find({ user: req.user._id, status: { $ne: 'completed' } });
     const classSlots = await ClassSlot.find({ user: req.user._id });
@@ -262,15 +310,32 @@ const getWorkloadInsights = async (req, res) => {
     today.setHours(0, 0, 0, 0);
     const overdueCount = tasks.filter((t) => new Date(t.deadline) < today).length;
     const HORIZON_DAYS = 7;
+    const horizonEnd = new Date(today);
+    horizonEnd.setDate(horizonEnd.getDate() + HORIZON_DAYS);
+
+    // Assignments and goal milestones don't have scheduled study hours of their
+    // own, but a submission due that day is still real pressure — count it as
+    // extra load so the burnout detector isn't blind to deadlines that live
+    // outside the Task/AI-scheduling system entirely.
+    const [assignments, goals] = await Promise.all([
+      Assignment.find({ user: req.user._id, status: { $ne: 'graded' }, deadline: { $gte: today, $lt: horizonEnd } }),
+      Goal.find({ user: req.user._id, 'milestones.completed': false, 'milestones.targetDate': { $gte: today, $lt: horizonEnd } })
+    ]);
+    const ASSIGNMENT_LOAD_HOURS = 2;
+    const MILESTONE_LOAD_HOURS = 1;
 
     const dayTotals = new Map();
     const dayWeekdays = new Map();
+    const dayAssignments = new Map();
+    const dayMilestones = new Map();
     for (let i = 0; i < HORIZON_DAYS; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
       const key = toLocalISODate(d);
       dayTotals.set(key, 0);
       dayWeekdays.set(key, d.getDay());
+      dayAssignments.set(key, 0);
+      dayMilestones.set(key, 0);
     }
 
     tasks.forEach((task) => {
@@ -282,6 +347,25 @@ const getWorkloadInsights = async (req, res) => {
       });
     });
 
+    assignments.forEach((a) => {
+      const key = toLocalISODate(new Date(a.deadline));
+      if (dayTotals.has(key)) {
+        dayTotals.set(key, Number((dayTotals.get(key) + ASSIGNMENT_LOAD_HOURS).toFixed(1)));
+        dayAssignments.set(key, dayAssignments.get(key) + 1);
+      }
+    });
+
+    goals.forEach((goal) => {
+      goal.milestones.forEach((m) => {
+        if (m.completed || !m.targetDate) return;
+        const key = toLocalISODate(new Date(m.targetDate));
+        if (dayTotals.has(key)) {
+          dayTotals.set(key, Number((dayTotals.get(key) + MILESTONE_LOAD_HOURS).toFixed(1)));
+          dayMilestones.set(key, dayMilestones.get(key) + 1);
+        }
+      });
+    });
+
     const days = Array.from(dayTotals.entries()).map(([date, hours]) => {
       const classHoursToday = Number((classHours.get(dayWeekdays.get(date)) || 0).toFixed(1));
       const freeCapacity = Math.max(0, Number((dailyCapacity - classHoursToday).toFixed(1)));
@@ -289,6 +373,8 @@ const getWorkloadInsights = async (req, res) => {
         date,
         hours,
         classHours: classHoursToday,
+        assignmentsDue: dayAssignments.get(date) || 0,
+        milestonesDue: dayMilestones.get(date) || 0,
         freeCapacity,
         overloaded: hours > freeCapacity
       };
@@ -304,12 +390,19 @@ const getWorkloadInsights = async (req, res) => {
     let title = null;
     let suggestion = null;
 
+    const peakDayLoadNote = peakDay && (peakDay.assignmentsDue > 0 || peakDay.milestonesDue > 0)
+      ? ` (includes ${[
+          peakDay.assignmentsDue > 0 ? `${peakDay.assignmentsDue} assignment${peakDay.assignmentsDue === 1 ? '' : 's'} due` : null,
+          peakDay.milestonesDue > 0 ? `${peakDay.milestonesDue} goal milestone${peakDay.milestonesDue === 1 ? '' : 's'} due` : null
+        ].filter(Boolean).join(' and ')})`
+      : '';
+
     if (scheduleOverloaded || overdueOverloaded) {
       severity = 'error';
       title = '🔥 Burnout Risk';
       const parts = [];
       if (scheduleOverloaded) {
-        parts.push(`${overloadedCount} day${overloadedCount === 1 ? '' : 's'} this week over your available capacity (peaking at ${peakDay.hours}h on ${peakDay.date}, ${peakDay.freeCapacity}h free that day)`);
+        parts.push(`${overloadedCount} day${overloadedCount === 1 ? '' : 's'} this week over your available capacity (peaking at ${peakDay.hours}h on ${peakDay.date}, ${peakDay.freeCapacity}h free that day${peakDayLoadNote})`);
       }
       if (overdueOverloaded) {
         parts.push(`${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}`);
@@ -320,7 +413,7 @@ const getWorkloadInsights = async (req, res) => {
       title = '⚠️ Workload Warning';
       suggestion = overdueCount > 0
         ? `You have ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}. Take a break and tackle them one at a time.`
-        : `${peakDay.date} is scheduled at ${peakDay.hours}h, over your ${peakDay.freeCapacity}h free that day (after classes). Consider spreading it out.`;
+        : `${peakDay.date} is scheduled at ${peakDay.hours}h, over your ${peakDay.freeCapacity}h free that day (after classes)${peakDayLoadNote}. Consider spreading it out.`;
     } else if (overdueCount > 0) {
       severity = 'info';
       title = '💡 Heads Up';

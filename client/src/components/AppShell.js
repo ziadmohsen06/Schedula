@@ -4,8 +4,7 @@ import { AppBar, Toolbar, Typography, Button, Box, IconButton, Drawer, Tooltip, 
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import SettingsIcon from '@mui/icons-material/Settings';
-import BedtimeIcon from '@mui/icons-material/Bedtime';
-import WbSunnyIcon from '@mui/icons-material/WbSunny';
+import TimerIcon from '@mui/icons-material/Timer';
 import HistoryIcon from '@mui/icons-material/History';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -23,7 +22,6 @@ const AppShell = ({ children }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
-  const [lazyMode, setLazyMode] = useState(() => localStorage.getItem('lazyMode') === 'true');
   const [themeName, setThemeName] = useState(() => localStorage.getItem('themeName') || 'garden');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeTimerRef = useRef(null);
@@ -33,12 +31,6 @@ const AppShell = ({ children }) => {
     syncDarkMode();
     window.addEventListener('darkModeChanged', syncDarkMode);
     return () => window.removeEventListener('darkModeChanged', syncDarkMode);
-  }, []);
-
-  useEffect(() => {
-    const syncLazy = () => setLazyMode(localStorage.getItem('lazyMode') === 'true');
-    window.addEventListener('lazyModeChanged', syncLazy);
-    return () => window.removeEventListener('lazyModeChanged', syncLazy);
   }, []);
 
   useEffect(() => {
@@ -63,13 +55,6 @@ const AppShell = ({ children }) => {
       }
     };
   }, []);
-
-  const toggleLazyMode = () => {
-    const next = !lazyMode;
-    setLazyMode(next);
-    localStorage.setItem('lazyMode', next);
-    window.dispatchEvent(new Event('lazyModeChanged'));
-  };
 
   const openDrawer = () => {
     if (closeTimerRef.current) {
@@ -178,17 +163,9 @@ const AppShell = ({ children }) => {
                   <HistoryIcon />
                 </IconButton>
               </Tooltip>
-              <Tooltip title={lazyMode ? 'Lazy Mode ON — click to disable' : 'Enable Lazy Mode'} arrow>
-                <IconButton
-                  color="inherit"
-                  onClick={toggleLazyMode}
-                  sx={{
-                    bgcolor: lazyMode ? 'rgba(255,255,255,0.15)' : 'transparent',
-                    borderRadius: 2,
-                    transition: 'all 0.3s'
-                  }}
-                >
-                  {lazyMode ? <WbSunnyIcon sx={{ color: '#F6C453' }} /> : <BedtimeIcon />}
+              <Tooltip title="Focus Timer" arrow>
+                <IconButton color="inherit" onClick={() => navigate('/timer')} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+                  <TimerIcon />
                 </IconButton>
               </Tooltip>
               <Button color="inherit" onClick={() => navigate('/add-task')} sx={{ fontWeight: 600 }}>
@@ -341,6 +318,7 @@ const AppShell = ({ children }) => {
                 <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>Productivity</Typography>
                 <Stack spacing={0.5}>
                   {[
+                    { label: 'Focus Timer', path: '/timer' },
                     { label: 'Goals', path: '/goals' },
                     { label: 'Habits', path: '/habits' },
                     { label: 'Weekly Review', path: '/weekly-review' },

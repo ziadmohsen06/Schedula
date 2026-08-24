@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box, Typography, TextField, Button, Alert, Link,
-  InputAdornment, IconButton
+  InputAdornment, IconButton, FormControlLabel, Checkbox
 } from '@mui/material';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
@@ -18,6 +18,7 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +36,7 @@ const Login = () => {
         return;
       }
 
-      login(data);
+      login(data, rememberMe);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
@@ -96,6 +97,12 @@ const Login = () => {
               ),
             },
           }}
+        />
+
+        <FormControlLabel
+          control={<Checkbox checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />}
+          label="Remember me"
+          sx={{ mb: 1 }}
         />
 
         <Button

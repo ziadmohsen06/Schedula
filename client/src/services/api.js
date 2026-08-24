@@ -1,11 +1,11 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api'
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api'
 });
 
 API.interceptors.request.use((config) => {
-  const user = JSON.parse(localStorage.getItem('user'));
+  const user = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || 'null');
   if (user?.token) {
     config.headers.Authorization = `Bearer ${user.token}`;
   }

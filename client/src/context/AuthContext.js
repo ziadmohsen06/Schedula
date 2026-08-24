@@ -3,20 +3,32 @@ import { logoutUser } from '../services/api';
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(
-    JSON.parse(localStorage.getItem('user')) || null
-  );
+// "Remember me" decides where the session lives: localStorage survives
+// closing the browser/tab (persistent login), sessionStorage is cleared
+// when the tab/browser closes (asks for login again next time).
+const readStoredUser = () => {
+  const fromLocal = localStorage.getItem('user');
+  if (fromLocal) return JSON.parse(fromLocal);
+  const fromSession = sessionStorage.getItem('user');
+  return fromSession ? JSON.parse(fromSession) : null;
+};
 
-  const login = (userData) => {
-    localStorage.setItem('user', JSON.stringify(userData));
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(readStoredUser());
+
+  const login = (userData, remember = false) => {
+    localStorage.removeItem('user');
+    sessionStorage.removeItem('user');
+    (remember ? localStorage : sessionStorage).setItem('user', JSON.stringify(userData));
     setUser(userData);
   };
 
   const updateUser = (newData) => {
-    const current = JSON.parse(localStorage.getItem('user')) || {};
+    const persistedInLocal = !!localStorage.getItem('user');
+    const store = persistedInLocal ? localStorage : sessionStorage;
+    const current = JSON.parse(store.getItem('user')) || {};
     const merged = { ...current, ...newData };
-    localStorage.setItem('user', JSON.stringify(merged));
+    store.setItem('user', JSON.stringify(merged));
     setUser(merged);
   };
 
@@ -27,6 +39,7 @@ export const AuthProvider = ({ children }) => {
       // Ignore logout API failures and still clear local auth state
     } finally {
       localStorage.removeItem('user');
+      sessionStorage.removeItem('user');
       setUser(null);
     }
   };

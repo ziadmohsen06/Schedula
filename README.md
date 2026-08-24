@@ -5,22 +5,23 @@
 ## ✨ Features
 
 ### 🎯 Core Task Management
-- **AI Task Scheduling** — Powered by Cohere API, automatically splits tasks across days
-- **Smart Calendar** — Week/day views with hourly time slots, drag-and-drop rescheduling, and a task detail dialog
-- **AI Chat Assistant** — Natural-language commands like "move everything to next week" or "I have an exam Thursday"
-- **Pomodoro Timer** — Focus timer integrated with specific tasks, with a Lazy Mode shortened variant
-- **Task Management** — Create, edit, delete, and complete tasks with priorities, tags, and notes
+- **AI Task Scheduling** — Powered by Cohere API, automatically splits tasks across days, and now avoids placing study time during your recorded class hours
+- **Smart Calendar** — Week/day views with hourly time slots, drag-and-drop rescheduling, a task detail dialog, and an overlay of your classes, assignment deadlines, and goal milestones
+- **AI Chat Assistant** — Natural-language commands like "move everything to next week" or "I have an exam Thursday", including creating tasks from a single sentence
+- **Focus Timer** — Dedicated timer page (header shortcut) with Start/Pause/Reset, ambient focus sounds, and the Lazy Mode toggle
+- **Task Management** — Create, edit, delete, and complete tasks with priorities, tags, notes, and quick-fill templates (University Assignment, Exam Prep, etc.)
+- **Overdue Summary** — Dashboard groups overdue tasks into their own section instead of just flagging them inline
 - **Time Redistribution** — Spread leftover time to other tasks after finishing early
 - **Recurring Tasks** — Bounded recurring series with automatic scheduling
 - **Search, Filter & Export** — Find tasks by title/description/tag; export as CSV, JSON, or TXT
 
 ### 📚 Academic Tools
 - **GPA Tracker** — Courses, grades, and calculated GPA
-- **Assignments** — University assignments with submission links and deadlines
-- **Class Schedule** — Weekly timetable view
-- **Goals & Milestones** — Track long-term goals with checkable milestones
-- **Habits** — Daily habit tracking with streaks
-- **Weekly Review** — Automated summary of the week's progress
+- **Assignments** — University assignments with submission links and deadlines, visible on the Calendar and factored into burnout detection
+- **Class Schedule** — Weekly recurring class times, shown on the Calendar and respected by AI scheduling to avoid overlap
+- **Goals & Milestones** — Track long-term goals with checkable milestones, surfaced on the Calendar and in the Weekly Review
+- **Habits** — Daily habit tracking with streaks, reflected in a Dashboard stat
+- **Weekly Review** — Completed/missed tasks, assignments past deadline or due next week, and upcoming goal milestones in one summary
 
 ### 🤝 Social & Accountability
 - **Study Buddies** — Friend requests, leaderboard, shared progress
@@ -28,7 +29,7 @@
 - **Weekly Digest** — Scheduled email summary of upcoming tasks and progress
 
 ### 🔐 Security
-- **JWT Authentication** with session tracking (active sessions list + revoke)
+- **JWT Authentication** with session tracking (active sessions list + revoke) and a "Remember me" login option (session-only by default, persistent if checked)
 - **Two-Factor Authentication** — OTP via email (speakeasy + QR code)
 - **Password History** — Prevents reusing the last 5 passwords
 - **AES Encryption** — Task descriptions encrypted at rest
@@ -40,12 +41,13 @@
 
 ### 🎨 Theming & Garden Experience
 - **4 Full Themes** — Garden, Ocean, Space, and Minimal, each with its own ambient background, growth visual, decorations, and copy — synced across the app, pre-login pages, and even outgoing emails
+- **Landing Page** — Themed marketing page for logged-out visitors, with a custom 404 page and error boundary for the rest of the app
 - **Dark/Light Mode** — Per-theme dark variants with smooth transitions
 - **Streak Page** — Growing plant (or theme-equivalent) visual + GitHub-style contribution grid
 - **Leaf Confetti & Sound Effects** — Celebratory animation and soft rustle on task completion
-- **Mood Check-In & Daily Start Prompt** — Personalizes the day's briefing and AI scheduling window
-- **Burnout Detection** — Warning when too many tasks are overdue
-- **Dashboard Stats** — Completion rate, overdue count, progress bar, deadline countdowns
+- **Mood Check-In & Daily Start Prompt** — Same-day mood actually softens AI scheduling capacity and the burnout threshold, not just the Dashboard's briefing text
+- **Burnout Detection** — Weighs scheduled task hours, class hours, upcoming assignment deadlines, and goal milestones together, not just overdue tasks
+- **Dashboard Stats** — Completion rate, overdue count, habits-today, progress bar, deadline countdowns, with skeleton loaders while data is in flight
 
 ## 🛠 Tech Stack
 
@@ -113,7 +115,7 @@ npm install
 npm start
 ```
 
-The client runs on `http://localhost:3000` and expects the API at `http://localhost:5000/api`.
+The client runs on `http://localhost:3000` and defaults to an API at `http://localhost:5000/api`. To point it at a different backend (e.g. a deployed Render URL), set `REACT_APP_API_URL` in `client/.env` — see `client/.env.example`.
 
 ## 📁 Project Structure
 

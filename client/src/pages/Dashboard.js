@@ -2,18 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container, Box, Typography, Button, ButtonBase,
-  Card, CardContent, CardActions, Chip, Alert, CircularProgress,
+  Card, CardContent, CardActions, Chip, Alert, Skeleton,
   Stack, Paper, MenuItem, Select, FormControl, InputLabel,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Snackbar
 } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
-import { getTasks, getCompletedTasks, deleteTask, scheduleTask, rescheduleTask, completeTask, getWorkloadInsights, getMood, getSmartSuggestions } from '../services/api';
+import { getTasks, getCompletedTasks, deleteTask, scheduleTask, rescheduleTask, completeTask, getWorkloadInsights, getMood, getSmartSuggestions, getHabits } from '../services/api';
 import AppShell from '../components/AppShell';
 import { getDeadlineStatus, formatDeadline } from '../utils/dateUtils';
 import { playLeafSound, isSoundEnabled } from '../utils/soundUtils';
-import { startFocusSound, stopFocusSound } from '../utils/focusSound';
 import { useThemeName } from '../hooks/useThemeName';
 import { getThemeContent } from '../themeContent';
 
@@ -52,9 +51,6 @@ const Dashboard = () => {
   const [error, setError] = useState('');
   const [lazyMode, setLazyMode] = useState(() => localStorage.getItem('lazyMode') === 'true');
   const [sortOrder, setSortOrder] = useState('priority-high');
-  const [focusTime, setFocusTime] = useState(() => (localStorage.getItem('lazyMode') === 'true' ? 15 * 60 : 25 * 60));
-  const [isFocusRunning, setIsFocusRunning] = useState(false);
-  const [focusSound, setFocusSound] = useState('off');
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [scheduleTaskId, setScheduleTaskId] = useState(null);
   const [scheduleDeadline, setScheduleDeadline] = useState('');
@@ -68,6 +64,7 @@ const Dashboard = () => {
     highPriorityCount: 0
   });
   const [workload, setWorkload] = useState(null);
+  const [habits, setHabits] = useState([]);
   const [mood, setMood] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [milestoneMessage, setMilestoneMessage] = useState('');
@@ -79,6 +76,7 @@ const Dashboard = () => {
     fetchWorkload();
     fetchMood();
     fetchSuggestions();
+    fetchHabits();
   }, [user, navigate]);
 
   useEffect(() => {
@@ -88,12 +86,7 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    const syncLazy = () => {
-      const lazy = localStorage.getItem('lazyMode') === 'true';
-      setLazyMode(lazy);
-      setIsFocusRunning(false);
-      setFocusTime(lazy ? 15 * 60 : 25 * 60);
-    };
+    const syncLazy = () => setLazyMode(localStorage.getItem('lazyMode') === 'true');
     window.addEventListener('lazyModeChanged', syncLazy);
     return () => window.removeEventListener('lazyModeChanged', syncLazy);
   }, []);
@@ -104,25 +97,14 @@ const Dashboard = () => {
     window.dispatchEvent(new Event('lazyModeChanged'));
   };
 
-  useEffect(() => {
-    if (!isFocusRunning) return;
-    const timer = setInterval(() => {
-      setFocusTime((prev) => {
-        if (prev <= 1) { setIsFocusRunning(false); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isFocusRunning]);
-
-  useEffect(() => {
-    if (isFocusRunning && focusSound !== 'off') {
-      startFocusSound(focusSound);
-    } else {
-      stopFocusSound();
+  const fetchHabits = async () => {
+    try {
+      const { data } = await getHabits();
+      setHabits(data);
+    } catch (err) {
+      // non-critical widget; fail silently
     }
-    return () => stopFocusSound();
-  }, [isFocusRunning, focusSound]);
+  };
 
   // Fetches active + completed tasks together and derives stats from that one
   // pair, instead of computing stats from whatever `tasks` state happens to be
@@ -274,15 +256,81 @@ const Dashboard = () => {
     }
   }
     const sortedTasks = getSortedTasks();
+  const overdueTasks = sortedTasks.filter(t => getDeadlineStatus(t.deadline).isOverdue);
+  const upcomingTasks = sortedTasks.filter(t => !getDeadlineStatus(t.deadline).isOverdue);
   const topTask = tasks.reduce((best, task) => {
     if (!best) return task;
     return priorityWeight[task.priority] > priorityWeight[best.priority] ? task : best;
   }, null);
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
+  const renderTaskCard = (task, idx) => {
+    const deadlineStatus = getDeadlineStatus(task.deadline);
+    const isCompleting = completingId === task._id;
+    return (
+      <Card
+        key={task._id}
+        className="garden-card"
+        sx={{
+          border: deadlineStatus.isOverdue ? '2px solid #e57373' : 'none',
+          animationDelay: `${idx * 0.05}s`,
+          position: 'relative',
+          overflow: 'hidden',
+          opacity: isCompleting ? 0.5 : 1,
+          transition: 'all 0.5s ease',
+        }}
+      >
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">{task.title}</Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {deadlineStatus.isOverdue && <Chip label="Overdue" color="error" size="small" />}
+              <Chip label={task.priority} color={priorityColor[task.priority]} size="small" />
+            </Box>
+          </Box>
+          {task.description && (
+            <Typography color="text.secondary" sx={{ mt: 1 }}>{task.description}</Typography>
+          )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              📅 {formatDeadline(task.deadline)}
+            </Typography>
+            <Chip
+              label={deadlineStatus.text}
+              size="small"
+              color={deadlineStatus.isOverdue ? 'error' : deadlineStatus.color}
+              sx={{ fontWeight: 'bold', fontSize: '11px' }}
+            />
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            ⏱ Estimated: {task.estimatedHours} hours
+          </Typography>
+        </CardContent>
+        <CardActions>
+          <Button
+            size="small"
+            color="success"
+            onClick={() => handleComplete(task._id)}
+            disabled={isCompleting}
+          >
+            {isCompleting ? '✓ Completing...' : '✓ Done'}
+          </Button>
+          <Button
+            size="small"
+            color="primary"
+            onClick={() => handleSchedule(task._id)}
+          >
+            🤖 Schedule
+          </Button>
+          <Button
+            size="small"
+            color="error"
+            onClick={() => handleDelete(task._id)}
+          >
+            Delete
+          </Button>
+        </CardActions>
+      </Card>
+    );
   };
 
   return (
@@ -360,7 +408,7 @@ const Dashboard = () => {
         {/* AI Insights: briefing + smart suggestions together, one voice */}
         <Paper sx={{
           p: 2, mb: 3,
-          background: 'linear-gradient(135deg, rgba(105,195,125,0.08) 0%, rgba(246,196,83,0.06) 100%)',
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.secondary.main, 0.06)} 100%)`,
           position: 'relative', overflow: 'hidden'
         }}>
           <Typography variant="h6" sx={{ mb: 1 }}>🤖 AI Insights</Typography>
@@ -391,8 +439,8 @@ const Dashboard = () => {
         <Paper sx={{
           p: 2,
           mb: 3,
-          background: 'linear-gradient(135deg, rgba(105,195,125,0.1) 0%, rgba(246,196,83,0.08) 100%)',
-          border: '1px solid rgba(105,195,125,0.3)',
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.secondary.main, 0.08)} 100%)`,
+          border: '1px solid', borderColor: alpha(theme.palette.primary.main, 0.3),
           borderRadius: 2,
         }}>
           <Typography variant="h6" sx={{ mb: 2 }}>📊 Progress Overview</Typography>
@@ -416,6 +464,14 @@ const Dashboard = () => {
               </Typography>
               <Typography variant="caption" color="text.secondary">Overdue</Typography>
             </Box>
+            {habits.length > 0 && (
+              <Box sx={{ flex: 1, minWidth: 100, textAlign: 'center' }}>
+                <Typography variant="h4" fontWeight="bold" color="secondary.main">
+                  {habits.filter((h) => h.completedToday).length}/{habits.length}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">Habits Today</Typography>
+              </Box>
+            )}
             <Box sx={{ flex: 1, minWidth: 100, textAlign: 'center' }}>
               <Typography variant="h4" fontWeight="bold" color="error.main">
                 {stats.highPriorityCount}
@@ -500,25 +556,21 @@ const Dashboard = () => {
           </Paper>
         </Stack>
 
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>⚡ Focus Session {lazyMode ? '🌙' : ''}</Typography>
-          <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>{formatTime(focusTime)}</Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Button variant="contained" onClick={() => setIsFocusRunning((prev) => !prev)}>
-              {isFocusRunning ? 'Pause' : 'Start'}
-            </Button>
-            <Button variant="outlined" onClick={() => { setIsFocusRunning(false); setFocusTime(lazyMode ? 15 * 60 : 25 * 60); }}>
-              Reset
-            </Button>
-            <FormControl size="small" sx={{ minWidth: 160 }}>
-              <InputLabel>Focus Sound</InputLabel>
-              <Select value={focusSound} label="Focus Sound" onChange={(e) => setFocusSound(e.target.value)}>
-                <MenuItem value="off">Off</MenuItem>
-                <MenuItem value="brown">🌊 Brown Noise</MenuItem>
-                <MenuItem value="rain">🌧 Rain</MenuItem>
-              </Select>
-            </FormControl>
+        <Paper
+          component={ButtonBase}
+          onClick={() => navigate('/timer')}
+          sx={{
+            p: 2, mb: 3, width: '100%', textAlign: 'left', display: 'flex',
+            justifyContent: 'space-between', alignItems: 'center',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            '&:hover': { transform: 'translateY(-3px)', boxShadow: `0 8px 24px ${theme.palette.primary.main}26` }
+          }}
+        >
+          <Box>
+            <Typography variant="h6">⏱ Focus Timer</Typography>
+            <Typography variant="body2" color="text.secondary">Start a focus session{lazyMode ? ' — Lazy Mode is on' : ''}.</Typography>
           </Box>
+          <Typography sx={{ color: 'text.secondary' }}>›</Typography>
         </Paper>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -536,8 +588,25 @@ const Dashboard = () => {
         </Box>
 
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {[0, 1, 2].map((i) => (
+              <Card key={i}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Skeleton variant="text" width="45%" height={32} />
+                    <Skeleton variant="rounded" width={60} height={24} />
+                  </Box>
+                  <Skeleton variant="text" width="70%" sx={{ mt: 1 }} />
+                  <Skeleton variant="text" width="35%" />
+                  <Skeleton variant="text" width="30%" />
+                </CardContent>
+                <CardActions>
+                  <Skeleton variant="rounded" width={70} height={30} />
+                  <Skeleton variant="rounded" width={90} height={30} />
+                  <Skeleton variant="rounded" width={60} height={30} />
+                </CardActions>
+              </Card>
+            ))}
           </Box>
         ) : tasks.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 6 }}>
@@ -549,76 +618,29 @@ const Dashboard = () => {
             </Button>
           </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {sortedTasks.map((task, idx) => {
-              const deadlineStatus = getDeadlineStatus(task.deadline);
-              const isCompleting = completingId === task._id;
-              return (
-                <Card
-                  key={task._id}
-                  className="garden-card"
-                  sx={{
-                    border: deadlineStatus.isOverdue ? '2px solid #e57373' : 'none',
-                    animationDelay: `${idx * 0.05}s`,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    opacity: isCompleting ? 0.5 : 1,
-                    transition: 'all 0.5s ease',
-                  }}
-                >
-                  <CardContent>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="h6">{task.title}</Typography>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        {deadlineStatus.isOverdue && <Chip label="Overdue" color="error" size="small" />}
-                        <Chip label={task.priority} color={priorityColor[task.priority]} size="small" />
-                      </Box>
-                    </Box>
-                    {task.description && (
-                      <Typography color="text.secondary" sx={{ mt: 1 }}>{task.description}</Typography>
-                    )}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        📅 {formatDeadline(task.deadline)}
-                      </Typography>
-                      <Chip 
-                        label={deadlineStatus.text}
-                        size="small"
-                        color={deadlineStatus.isOverdue ? 'error' : deadlineStatus.color}
-                        sx={{ fontWeight: 'bold', fontSize: '11px' }}
-                      />
-                    </Box>
-                    <Typography variant="body2" color="text.secondary">
-                      ⏱ Estimated: {task.estimatedHours} hours
-                    </Typography>
-                  </CardContent>
-                  <CardActions>
-                    <Button
-                      size="small"
-                      color="success"
-                      onClick={() => handleComplete(task._id)}
-                      disabled={isCompleting}
-                    >
-                      {isCompleting ? '✓ Completing...' : '✓ Done'}
-                    </Button>
-                    <Button
-                      size="small"
-                      color="primary"
-                      onClick={() => handleSchedule(task._id)}
-                    >
-                      🤖 Schedule
-                    </Button>
-                    <Button
-                      size="small"
-                      color="error"
-                      onClick={() => handleDelete(task._id)}
-                    >
-                      Delete
-                    </Button>
-                  </CardActions>
-                </Card>
-              );
-            })}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {overdueTasks.length > 0 && (
+              <Box>
+                <Typography variant="subtitle1" fontWeight="bold" color="error.main" sx={{ mb: 1 }}>
+                  ⚠️ Overdue ({overdueTasks.length})
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {overdueTasks.map((task, idx) => renderTaskCard(task, idx))}
+                </Box>
+              </Box>
+            )}
+            {upcomingTasks.length > 0 && (
+              <Box>
+                {overdueTasks.length > 0 && (
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
+                    {content.tasksEmoji} Active
+                  </Typography>
+                )}
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {upcomingTasks.map((task, idx) => renderTaskCard(task, idx))}
+                </Box>
+              </Box>
+            )}
           </Box>
         )}
       </Container>

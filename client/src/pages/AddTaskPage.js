@@ -11,6 +11,14 @@ import { getTagColor } from '../utils/tagColors';
 const TAGS = ['University', 'School', 'Test', 'Work', 'Personal', 'Gym', 'Errands', 'Other'];
 const STUDY_TAGS = ['University', 'School', 'Test'];
 
+const TASK_TEMPLATES = [
+  { label: '🎓 University Assignment', tags: ['University'], priority: 'high', estimatedHours: 3 },
+  { label: '📝 Exam Prep', tags: ['Test'], priority: 'urgent', estimatedHours: 4 },
+  { label: '💼 Work Task', tags: ['Work'], priority: 'medium', estimatedHours: 2 },
+  { label: '🏋️ Gym Session', tags: ['Gym'], priority: 'low', estimatedHours: 1 },
+  { label: '🏃 Errand', tags: ['Errands'], priority: 'low', estimatedHours: 1 }
+];
+
 const AddTaskPage = () => {
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
@@ -28,6 +36,12 @@ const AddTaskPage = () => {
 
   const isStudyTask = tags.some((tag) => STUDY_TAGS.includes(tag));
   const isExamTask = tags.includes('Test');
+
+  const applyTemplate = (template) => {
+    setTags(template.tags);
+    setPriority(template.priority);
+    setEstimatedHours(template.estimatedHours);
+  };
 
   const getTodayString = () => {
     const today = new Date();
@@ -116,6 +130,21 @@ const AddTaskPage = () => {
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Quick templates</Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {TASK_TEMPLATES.map((template) => (
+              <Chip
+                key={template.label}
+                label={template.label}
+                onClick={() => applyTemplate(template)}
+                variant="outlined"
+                sx={{ cursor: 'pointer' }}
+              />
+            ))}
+          </Box>
+        </Box>
 
         <Box component="form" onSubmit={handleAddTask} sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
           <TextField label="Title" fullWidth value={title} onChange={(e) => setTitle(e.target.value)} required />

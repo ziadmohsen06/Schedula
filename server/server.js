@@ -61,8 +61,14 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
-// Serve uploaded files
-app.use('/uploads', express.static(uploadsDir));
+// Serve uploaded files — override helmet's default same-origin CORP so the
+// frontend (a different origin in dev, and always in production with
+// Vercel+Render) is actually allowed to render these images instead of the
+// browser silently blocking them.
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(uploadsDir));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
