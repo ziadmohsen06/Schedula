@@ -1,42 +1,51 @@
 # 🌿 Schedula — AI-Powered Student Planner
 
-**Schedula** is a full-stack web application that helps students manage their tasks with AI-powered scheduling. Built with a beautiful garden theme, it turns productivity into a growing experience.
+**Schedula** is a full-stack web application that helps students manage coursework, deadlines, habits, and study time with AI-powered scheduling. It ships with four fully-themed visual identities (Garden, Ocean, Space, Minimal) that reskin everything from the dashboard to password-reset emails, not just the color palette.
 
 ## ✨ Features
 
-### 🎯 Core Features
+### 🎯 Core Task Management
 - **AI Task Scheduling** — Powered by Cohere API, automatically splits tasks across days
-- **Smart Calendar** — Weekly view with time slots, task details, and day/night modes
-- **Pomodoro Timer** — Focus timer integrated with specific tasks
-- **Task Management** — Create, edit, delete, and complete tasks with ease
-- **Tags & Categories** — Organize tasks by University, Work, Personal, Gym, Errands
-- **Task Notes** — Add expandable notes to any task
-- **Search & Filter** — Find tasks by title, description, or tag
-- **Export** — Download tasks as CSV, JSON, or TXT
+- **Smart Calendar** — Week/day views with hourly time slots, drag-and-drop rescheduling, and a task detail dialog
+- **AI Chat Assistant** — Natural-language commands like "move everything to next week" or "I have an exam Thursday"
+- **Pomodoro Timer** — Focus timer integrated with specific tasks, with a Lazy Mode shortened variant
+- **Task Management** — Create, edit, delete, and complete tasks with priorities, tags, and notes
+- **Time Redistribution** — Spread leftover time to other tasks after finishing early
+- **Recurring Tasks** — Bounded recurring series with automatic scheduling
+- **Search, Filter & Export** — Find tasks by title/description/tag; export as CSV, JSON, or TXT
+
+### 📚 Academic Tools
+- **GPA Tracker** — Courses, grades, and calculated GPA
+- **Assignments** — University assignments with submission links and deadlines
+- **Class Schedule** — Weekly timetable view
+- **Goals & Milestones** — Track long-term goals with checkable milestones
+- **Habits** — Daily habit tracking with streaks
+- **Weekly Review** — Automated summary of the week's progress
+
+### 🤝 Social & Accountability
+- **Study Buddies** — Friend requests, leaderboard, shared progress
+- **Accountability Partner** — Automatic weekly progress email to a friend or mentor
+- **Weekly Digest** — Scheduled email summary of upcoming tasks and progress
 
 ### 🔐 Security
-- **JWT Authentication** — Secure token-based auth
+- **JWT Authentication** with session tracking (active sessions list + revoke)
 - **Two-Factor Authentication** — OTP via email (speakeasy + QR code)
-- **Password History** — Prevents reusing last 5 passwords
-- **AES Encryption** — Task descriptions encrypted
-- **Rate Limiting** — Prevents brute force attacks
-- **Audit Logs** — Tracks user actions
-- **Anomaly Detection** — Detects suspicious logins
+- **Password History** — Prevents reusing the last 5 passwords
+- **AES Encryption** — Task descriptions encrypted at rest
+- **Rate Limiting & Security Headers** — Helmet, express-rate-limit, mongo-sanitize
+- **Audit Logs & Login History** — Tracks user actions and login attempts
+- **Anomaly Detection** — Flags suspicious logins
+- **Security Score** — At-a-glance account security rating
+- **GDPR Tools** — Export or delete all account data on demand
 
-### 🌱 Garden Theme
-- **Dark/Light Mode** — Smooth transitions
-- **Leaf Animations** — Floating leaves on task completion
-- **Sound Effects** — Soft leaf rustle on completion
-- **Streak Page** — Growing plant + GitHub-style contribution grid
-- **Lazy Mode** — Shortened focus timer for easy days
-- **Leaf Confetti** — Celebratory animation when all tasks done
-
-### 📊 Smart Features
-- **Burnout Detection** — Warning when too many overdue tasks
-- **Daily Start Prompt** — AI schedules based on when you want to start
-- **Time Redistribution** — Spread extra time to other tasks
-- **Dashboard Stats** — Completion rate, overdue count, progress bar
-- **Deadline Countdown** — "3 days left" with color coding
+### 🎨 Theming & Garden Experience
+- **4 Full Themes** — Garden, Ocean, Space, and Minimal, each with its own ambient background, growth visual, decorations, and copy — synced across the app, pre-login pages, and even outgoing emails
+- **Dark/Light Mode** — Per-theme dark variants with smooth transitions
+- **Streak Page** — Growing plant (or theme-equivalent) visual + GitHub-style contribution grid
+- **Leaf Confetti & Sound Effects** — Celebratory animation and soft rustle on task completion
+- **Mood Check-In & Daily Start Prompt** — Personalizes the day's briefing and AI scheduling window
+- **Burnout Detection** — Warning when too many tasks are overdue
+- **Dashboard Stats** — Completion rate, overdue count, progress bar, deadline countdowns
 
 ## 🛠 Tech Stack
 
@@ -47,20 +56,80 @@
 | **Database** | MongoDB Atlas (Mongoose) |
 | **AI** | Cohere API (command-r7b-12-2024) |
 | **Auth** | JWT, bcryptjs, speakeasy (2FA) |
-| **Email** | Nodemailer (Gmail SMTP) |
+| **Email** | Nodemailer (SMTP), node-cron (scheduled digests) |
 | **Encryption** | crypto-js (AES) |
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 - Node.js v14+
-- MongoDB Atlas account
+- MongoDB Atlas account (or a local MongoDB instance)
 - Cohere API key
-- Gmail account (for OTP emails)
+- An SMTP-capable email account (for OTP, digest, and accountability emails)
 
 ### Installation
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/YOUR_USERNAME/Schedula.git
+git clone https://github.com/ziadmohsen06/Schedula.git
 cd Schedula
+```
+
+2. **Install server dependencies**
+```bash
+cd server
+npm install
+```
+
+3. **Configure server environment variables**
+
+Create a `server/.env` file:
+```env
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+JWT_EXPIRE=7d
+COHERE_API_KEY=your_cohere_api_key
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_USER=your_email@example.com
+EMAIL_PASS=your_email_password_or_app_password
+PORT=5000
+NODE_ENV=development
+```
+
+4. **Start the backend**
+```bash
+npm run dev
+```
+
+5. **Install client dependencies** (in a new terminal)
+```bash
+cd client
+npm install
+```
+
+6. **Start the frontend**
+```bash
+npm start
+```
+
+The client runs on `http://localhost:3000` and expects the API at `http://localhost:5000/api`.
+
+## 📁 Project Structure
+
+```
+Schedula/
+├── client/          # React frontend (Material UI)
+│   └── src/
+│       ├── components/   # Shared UI (AppShell, dialogs, chat widget, theming)
+│       ├── pages/        # Route-level pages
+│       ├── hooks/        # Theme + shared hooks
+│       ├── context/      # Auth context
+│       └── services/     # API client
+└── server/          # Express backend
+    ├── controllers/
+    ├── models/
+    ├── routes/
+    ├── middleware/
+    └── utils/            # Email, encryption, security, digest helpers
+```
