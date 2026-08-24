@@ -1,12 +1,16 @@
     import React, { useEffect, useState } from 'react';
     import { Box } from '@mui/material';
+    import { useThemeName } from '../hooks/useThemeName';
+    import { getThemeContent } from '../themeContent';
 
     const FloatingLeaves = ({ trigger, count = 10 }) => {
     const [leaves, setLeaves] = useState([]);
+    const themeName = useThemeName();
+    const content = getThemeContent(themeName);
 
     useEffect(() => {
-        if (trigger > 0) {
-        const leafEmojis = ['🍃', '🌿', '🍀', '☘️', '🌱'];
+        if (trigger > 0 && content.ambientEmojis.length > 0) {
+        const leafEmojis = content.ambientEmojis;
         const newLeaves = [];
         
         for (let i = 0; i < count; i++) {

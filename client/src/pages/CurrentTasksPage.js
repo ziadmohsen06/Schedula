@@ -19,18 +19,10 @@ import TimeRedistributionDialog from '../components/TimeRedistributionDialog';
 import { getDeadlineStatus, formatDeadline } from '../utils/dateUtils';
 import { playLeafSound, isSoundEnabled } from '../utils/soundUtils';
 import { exportToCSV, exportToJSON, exportToPDF } from '../utils/exportUtils';
+import { TAG_COLORS as tagColors, getTagColor } from '../utils/tagColors';
 
 const priorityColor = { low: 'success', medium: 'warning', high: 'error', urgent: 'error' };
 const priorityWeight = { low: 1, medium: 2, high: 3, urgent: 4 };
-
-const tagColors = {
-  University: '#1976d2',
-  Work: '#9c27b0',
-  Personal: '#69C37D',
-  Gym: '#ff9800',
-  Errands: '#f44336',
-  Other: '#607d8b'
-};
 
 const CurrentTasksPage = () => {
   const { user } = useAuth();

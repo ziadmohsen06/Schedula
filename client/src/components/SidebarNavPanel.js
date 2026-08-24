@@ -1,43 +1,68 @@
 import React from 'react';
-import { Box, Typography, List, ListItemButton, ListItemText, Divider, IconButton } from '@mui/material';
+import { Box, Typography, List, ListItemButton, ListItemText, IconButton } from '@mui/material';
+import { useTheme, alpha } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
-import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
-import HistoryIcon from '@mui/icons-material/History';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import HomeIcon from '@mui/icons-material/Home';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import SchoolIcon from '@mui/icons-material/School';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import FlagIcon from '@mui/icons-material/Flag';
+import RepeatIcon from '@mui/icons-material/Repeat';
+import RateReviewIcon from '@mui/icons-material/RateReview';
+import GroupIcon from '@mui/icons-material/Group';
+import { getThemeContent } from '../themeContent';
 
-const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
+const SidebarNavPanel = ({ onClose, onSelect, darkMode, content }) => {
+  const c = content || getThemeContent('garden');
+  const theme = useTheme();
   const sections = [
     {
-      id: 'home',
-      label: '🏡 Home',
-      description: 'Go back to the main dashboard',
-      icon: <HomeIcon sx={{ color: '#9c27b0' }} />
-    },
-    {
       id: 'current',
-      label: '🌱 Current Tasks',
+      label: `${c.tasksEmoji} Current Tasks`,
       description: 'Active tasks sorted by priority',
-      icon: <TaskAltIcon sx={{ color: '#69C37D' }} />
+      icon: <TaskAltIcon color="primary" />
     },
     {
-      id: 'calendar',
-      label: '📅 Calendar',
-      description: 'View tasks on a daily timeline',
-      icon: <CalendarMonthIcon sx={{ color: '#0097a7' }} />
+      id: 'gpa',
+      label: '🎓 GPA Tracker',
+      description: 'Courses, grades, and your GPA',
+      icon: <SchoolIcon sx={{ color: '#5c6bc0' }} />
     },
     {
-      id: 'history',
-      label: '📜 History',
-      description: 'Completed tasks and past progress',
-      icon: <HistoryIcon sx={{ color: '#388e3c' }} />
+      id: 'assignments',
+      label: '📝 Assignments',
+      description: 'University assignments and submission links',
+      icon: <AssignmentIcon sx={{ color: '#00897b' }} />
     },
     {
-      id: 'streak',
-      label: '🔥 Streak',
-      description: 'Your garden and streak progress',
-      icon: <LocalFireDepartmentIcon sx={{ color: '#ff6f00' }} />
+      id: 'class-schedule',
+      label: '📚 Class Schedule',
+      description: 'Your weekly timetable',
+      icon: <EventNoteIcon sx={{ color: '#8d6e63' }} />
+    },
+    {
+      id: 'goals',
+      label: '🎯 Goals',
+      description: 'Big goals broken into weekly milestones',
+      icon: <FlagIcon sx={{ color: '#e53935' }} />
+    },
+    {
+      id: 'habits',
+      label: '🔁 Habits',
+      description: 'Daily habits with their own streaks',
+      icon: <RepeatIcon sx={{ color: '#43a047' }} />
+    },
+    {
+      id: 'weekly-review',
+      label: '📆 Weekly Review',
+      description: 'Completed, missed, and suggestions',
+      icon: <RateReviewIcon sx={{ color: '#fb8c00' }} />
+    },
+    {
+      id: 'social',
+      label: '👥 Study Buddies',
+      description: 'Friends, leaderboard, and shared progress',
+      icon: <GroupIcon sx={{ color: '#1e88e5' }} />
     }
   ];
 
@@ -46,8 +71,8 @@ const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
       sx={{
         width: 320,
         p: 0,
-        bgcolor: darkMode ? '#162418' : '#FCFFFC',
-        color: darkMode ? '#d4edda' : '#2E4634',
+        bgcolor: 'background.paper',
+        color: 'text.primary',
         height: '100%',
         display: 'flex',
         flexDirection: 'column'
@@ -61,10 +86,9 @@ const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderBottom: `1px solid ${darkMode ? 'rgba(105,195,125,0.15)' : 'rgba(105,195,125,0.2)'}`,
-        background: darkMode
-          ? 'linear-gradient(135deg, #1a3320 0%, #162418 100%)'
-          : 'linear-gradient(135deg, #f0faf0 0%, #FCFFFC 100%)'
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.12)} 0%, ${theme.palette.background.paper} 100%)`
       }}>
         <Box>
           <Typography
@@ -72,25 +96,25 @@ const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
             fontWeight={700}
             sx={{
               cursor: 'pointer',
-              color: darkMode ? '#69C37D' : '#3F8F5A',
+              color: 'primary.main',
               display: 'flex',
               alignItems: 'center',
               gap: 0.5
             }}
             onClick={() => onSelect('home')}
           >
-            🌿 Schedula
+            {c.logoEmoji} Schedula
           </Typography>
-          <Typography variant="caption" sx={{ color: darkMode ? '#8fac93' : '#6C7A6D' }}>
-            Your Productivity Garden
+          <Typography variant="caption" color="text.secondary">
+            {c.tagline}
           </Typography>
         </Box>
         <IconButton
           size="small"
           onClick={onClose}
           sx={{
-            color: darkMode ? '#8fac93' : '#6C7A6D',
-            '&:hover': { bgcolor: darkMode ? 'rgba(105,195,125,0.1)' : 'rgba(105,195,125,0.1)', color: '#69C37D' }
+            color: 'text.secondary',
+            '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main' }
           }}
         >
           <CloseIcon fontSize="small" />
@@ -98,8 +122,8 @@ const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
       </Box>
 
       {/* Nav items */}
-      <List sx={{ flex: 1, pt: 1, px: 1 }}>
-        {sections.map((section, index) => (
+      <List sx={{ flex: 1, minHeight: 0, overflowY: 'auto', pt: 1, px: 1 }}>
+        {sections.map((section) => (
           <React.Fragment key={section.id}>
             <ListItemButton
               onClick={() => onSelect(section.id)}
@@ -108,15 +132,8 @@ const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
                 mb: 0.5,
                 py: 1.2,
                 px: 1.5,
-                animation: `fadeSlideIn 0.3s ease forwards`,
-                animationDelay: `${index * 0.05}s`,
-                opacity: 0,
-                '@keyframes fadeSlideIn': {
-                  from: { opacity: 0, transform: 'translateX(-12px)' },
-                  to: { opacity: 1, transform: 'translateX(0)' }
-                },
                 '&:hover': {
-                  bgcolor: darkMode ? 'rgba(105,195,125,0.1)' : 'rgba(105,195,125,0.08)',
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
                   transform: 'translateX(4px)',
                   transition: 'all 0.2s ease'
                 },
@@ -131,11 +148,11 @@ const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
                   primaryTypographyProps={{
                     fontWeight: 600,
                     fontSize: 14,
-                    color: darkMode ? '#d4edda' : '#2E4634'
+                    color: 'text.primary'
                   }}
                   secondaryTypographyProps={{
                     fontSize: 12,
-                    color: darkMode ? '#8fac93' : '#6C7A6D'
+                    color: 'text.secondary'
                   }}
                 />
               </Box>
@@ -149,10 +166,9 @@ const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
         m: 2,
         p: 2,
         borderRadius: 3,
-        background: darkMode
-          ? 'linear-gradient(135deg, #2a1a00 0%, #1a1200 100%)'
-          : 'linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%)',
-        border: `1px solid ${darkMode ? '#7a4500' : '#F6C453'}`,
+        background: `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, darkMode ? 0.18 : 0.15)} 0%, ${alpha(theme.palette.secondary.main, darkMode ? 0.08 : 0.06)} 100%)`,
+        border: '1px solid',
+        borderColor: alpha(theme.palette.secondary.main, 0.4),
         position: 'relative',
         overflow: 'hidden'
       }}>
@@ -162,17 +178,17 @@ const SidebarNavPanel = ({ onClose, onSelect, darkMode }) => {
             display: 'flex',
             alignItems: 'center',
             gap: 0.8,
-            color: darkMode ? '#ffb74d' : '#b25f00',
+            color: 'secondary.main',
             fontWeight: 700
           }}
         >
-          🌱 Garden Tip
+          {c.tipEmoji} {c.tipTitle}
         </Typography>
-        <Typography variant="body2" sx={{ mt: 0.8, color: darkMode ? '#aaa' : '#6C7A6D', fontSize: 12 }}>
-          Complete tasks daily to keep your plant growing. Consistency is the key to a thriving garden!
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8, fontSize: 12 }}>
+          {c.tipText}
         </Typography>
         <Typography sx={{ position: 'absolute', bottom: 4, right: 8, fontSize: 32, opacity: 0.12 }}>
-          🌻
+          {c.tipEmoji}
         </Typography>
       </Box>
     </Box>

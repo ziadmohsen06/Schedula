@@ -25,6 +25,10 @@ const UserSchema = new mongoose.Schema({
     default: [],
     select: false
   },
+  passwordStrengthScore: {
+    type: Number,
+    default: 0
+  },
   passwordResetOtp: {
     type: String,
     select: false
@@ -57,6 +61,19 @@ const UserSchema = new mongoose.Schema({
   hasSeenDailyPrompt: {
     type: Boolean,
     default: false
+  },
+  lastMoodCheckIn: {
+    mood: { type: String, enum: ['great', 'okay', 'tired', 'stressed'] },
+    date: { type: String }
+  },
+  accountabilityPartnerEmail: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  themePreference: {
+    name: { type: String, enum: ['garden', 'ocean', 'space', 'minimal'], default: 'garden' },
+    darkMode: { type: Boolean, default: false }
   },
   createdAt: {
     type: Date,

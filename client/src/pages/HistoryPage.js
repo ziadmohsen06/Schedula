@@ -10,15 +10,8 @@ const HistoryPage = () => {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [q, setQ] = useState('');
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
 
   const limit = 10;
-
-  useEffect(() => {
-    const sync = () => setDarkMode(localStorage.getItem('darkMode') === 'true');
-    window.addEventListener('darkModeChanged', sync);
-    return () => window.removeEventListener('darkModeChanged', sync);
-  }, []);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -76,16 +69,7 @@ const HistoryPage = () => {
                 count={pages}
                 page={page}
                 onChange={(_, v) => setPage(v)}
-                sx={{
-                  '& .MuiPaginationItem-root': {
-                    color: darkMode ? '#fff' : 'inherit',
-                    borderColor: darkMode ? '#555' : 'inherit'
-                  },
-                  '& .MuiPaginationItem-root.Mui-selected': {
-                    bgcolor: darkMode ? '#1976d2' : 'primary.main',
-                    color: '#fff'
-                  }
-                }}
+                color="primary"
               />
             </Box>
           </Box>

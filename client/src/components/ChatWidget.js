@@ -9,8 +9,12 @@ import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
 import { sendChatCommand } from '../services/api';
+import { useThemeName } from '../hooks/useThemeName';
+import { getThemeContent } from '../themeContent';
 
 const ChatWidget = () => {
+  const themeName = useThemeName();
+  const content = getThemeContent(themeName);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -21,13 +25,6 @@ const ChatWidget = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
-
-  useEffect(() => {
-    const syncDarkMode = () => setDarkMode(localStorage.getItem('darkMode') === 'true');
-    window.addEventListener('darkModeChanged', syncDarkMode);
-    return () => window.removeEventListener('darkModeChanged', syncDarkMode);
-  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,8 +82,8 @@ const ChatWidget = () => {
           bottom: 24,
           right: 24,
           zIndex: 1000,
-          bgcolor: '#69C37D',
-          '&:hover': { bgcolor: '#3F8F5A' },
+          bgcolor: 'primary.main',
+          '&:hover': { bgcolor: 'primary.dark' },
         }}
       >
         {open ? <CloseIcon /> : <ChatIcon />}
@@ -107,17 +104,18 @@ const ChatWidget = () => {
             flexDirection: 'column',
             borderRadius: 3,
             overflow: 'hidden',
-            bgcolor: darkMode ? '#162418' : '#FCFFFC',
-            border: `1px solid ${darkMode ? '#333' : '#e0e0e0'}`,
+            bgcolor: 'background.paper',
+            border: '1px solid',
+            borderColor: 'divider',
           }}
         >
           {/* Header */}
           <Box sx={{
             p: 2,
-            bgcolor: darkMode ? '#1a3320' : '#69C37D',
-            color: '#fff',
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
           }}>
-            <Typography variant="h6" fontWeight="bold">🌿 Calendar Assistant</Typography>
+            <Typography variant="h6" fontWeight="bold">{content.logoEmoji} Calendar Assistant</Typography>
             <Typography variant="caption">Ask me to manage your schedule</Typography>
           </Box>
 
@@ -141,7 +139,7 @@ const ChatWidget = () => {
                 }}
               >
                 {msg.type === 'bot' && (
-                  <Avatar sx={{ width: 28, height: 28, bgcolor: '#69C37D' }}>
+                  <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main' }}>
                     <SmartToyIcon sx={{ fontSize: 16 }} />
                   </Avatar>
                 )}
@@ -150,16 +148,14 @@ const ChatWidget = () => {
                     p: 1.5,
                     maxWidth: '80%',
                     borderRadius: 2,
-                    bgcolor: msg.type === 'user' 
-                      ? (darkMode ? '#2a4a2a' : '#69C37D')
-                      : (darkMode ? '#1a1a1a' : '#f5f5f5'),
-                    color: msg.type === 'user' ? '#fff' : (darkMode ? '#d4edda' : 'inherit'),
+                    bgcolor: msg.type === 'user' ? 'primary.main' : 'action.hover',
+                    color: msg.type === 'user' ? 'primary.contrastText' : 'text.primary',
                   }}
                 >
                   <Typography variant="body2">{msg.text}</Typography>
                 </Paper>
                 {msg.type === 'user' && (
-                  <Avatar sx={{ width: 28, height: 28, bgcolor: '#F6C453' }}>
+                  <Avatar sx={{ width: 28, height: 28, bgcolor: 'secondary.main' }}>
                     <PersonIcon sx={{ fontSize: 16 }} />
                   </Avatar>
                 )}
@@ -182,7 +178,7 @@ const ChatWidget = () => {
           </Box>
 
           {/* Input */}
-          <Box sx={{ p: 2, pt: 1, borderTop: `1px solid ${darkMode ? '#333' : '#e0e0e0'}` }}>
+          <Box sx={{ p: 2, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <TextField
                 fullWidth
@@ -199,7 +195,7 @@ const ChatWidget = () => {
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
-                    bgcolor: darkMode ? '#1a1a1a' : '#fff',
+                    bgcolor: 'background.default',
                   }
                 }}
               />
@@ -207,9 +203,9 @@ const ChatWidget = () => {
                 color="primary"
                 onClick={() => handleSend()}
                 disabled={loading}
-                sx={{ bgcolor: '#69C37D', '&:hover': { bgcolor: '#3F8F5A' } }}
+                sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
               >
-                <SendIcon sx={{ color: '#fff' }} />
+                <SendIcon sx={{ color: 'primary.contrastText' }} />
               </IconButton>
             </Box>
           </Box>

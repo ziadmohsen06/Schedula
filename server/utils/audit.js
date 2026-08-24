@@ -74,12 +74,16 @@ const logLoginAuditEvent = async (userId, req, extra = {}) => {
     });
 
     await pruneAuditLogs(userId);
+
+    return warning;
   } catch (error) {
     console.error('Login audit log error:', error.message);
+    return false;
   }
 };
 
 module.exports = {
   logAuditEvent,
-  logLoginAuditEvent
+  logLoginAuditEvent,
+  getClientIp
 };

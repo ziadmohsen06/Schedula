@@ -11,9 +11,17 @@ import AddTaskPage from './pages/AddTaskPage';
 import ProfilePage from './pages/ProfilePage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
+import SecurityPage from './pages/SecurityPage';
 import StreakPage from './pages/StreakPage';
 import CurrentTasksPage from './pages/CurrentTasksPage';
 import CalendarPage from './pages/CalendarPage';
+import GPAPage from './pages/GPAPage';
+import AssignmentsPage from './pages/AssignmentsPage';
+import ClassSchedulePage from './pages/ClassSchedulePage';
+import GoalsPage from './pages/GoalsPage';
+import HabitsPage from './pages/HabitsPage';
+import WeeklyReviewPage from './pages/WeeklyReviewPage';
+import SocialPage from './pages/SocialPage';
 
 const PrivateRoute = ({ children }) => {
   const { user } = useAuth();
@@ -45,6 +53,9 @@ function App() {
           <Route path="/settings" element={
             <PrivateRoute><SettingsPage /></PrivateRoute>
           } />
+          <Route path="/security" element={
+            <PrivateRoute><SecurityPage /></PrivateRoute>
+          } />
           <Route path="/streak" element={
             <PrivateRoute><StreakPage /></PrivateRoute>
           } />
@@ -53,6 +64,27 @@ function App() {
           } />
           <Route path="/calendar" element={
             <PrivateRoute><CalendarPage /></PrivateRoute>
+          } />
+          <Route path="/gpa" element={
+            <PrivateRoute><GPAPage /></PrivateRoute>
+          } />
+          <Route path="/assignments" element={
+            <PrivateRoute><AssignmentsPage /></PrivateRoute>
+          } />
+          <Route path="/class-schedule" element={
+            <PrivateRoute><ClassSchedulePage /></PrivateRoute>
+          } />
+          <Route path="/goals" element={
+            <PrivateRoute><GoalsPage /></PrivateRoute>
+          } />
+          <Route path="/habits" element={
+            <PrivateRoute><HabitsPage /></PrivateRoute>
+          } />
+          <Route path="/weekly-review" element={
+            <PrivateRoute><WeeklyReviewPage /></PrivateRoute>
+          } />
+          <Route path="/social" element={
+            <PrivateRoute><SocialPage /></PrivateRoute>
           } />
           <Route path="/" element={<Navigate to="/login" />} />
         </Routes>

@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import { createTask, scheduleTask } from '../services/api';
 import AppShell from '../components/AppShell';
+import { getTagColor } from '../utils/tagColors';
 
 const TAGS = ['University', 'School', 'Test', 'Work', 'Personal', 'Gym', 'Errands', 'Other'];
 const STUDY_TAGS = ['University', 'School', 'Test'];
@@ -19,12 +20,14 @@ const AddTaskPage = () => {
   const [estimatedHours, setEstimatedHours] = useState(1);
   const [tags, setTags] = useState(['Other']);
   const [lessonCount, setLessonCount] = useState('');
+  const [studyStrategy, setStudyStrategy] = useState('none');
   const [recurrenceFrequency, setRecurrenceFrequency] = useState('none');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   const isStudyTask = tags.some((tag) => STUDY_TAGS.includes(tag));
+  const isExamTask = tags.includes('Test');
 
   const getTodayString = () => {
     const today = new Date();
@@ -60,7 +63,11 @@ const AddTaskPage = () => {
         tags
       };
 
-      if (isStudyTask && Number(lessonCount) > 0) {
+      if (isStudyTask && studyStrategy === 'examCountdown' && isExamTask) {
+        payload.examCountdown = true;
+      } else if (isStudyTask && studyStrategy === 'studyMode') {
+        payload.studyMode = true;
+      } else if (isStudyTask && studyStrategy === 'lessons' && Number(lessonCount) > 0) {
         payload.lessonCount = Number(lessonCount);
       }
 
@@ -91,6 +98,7 @@ const AddTaskPage = () => {
       setEstimatedHours(1);
       setTags(['Other']);
       setLessonCount('');
+      setStudyStrategy('none');
       setRecurrenceFrequency('none');
       setRecurrenceEndDate('');
     } catch (err) {
@@ -109,7 +117,7 @@ const AddTaskPage = () => {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-        <Box component="form" onSubmit={handleAddTask} sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 3, border: '1px solid #e0e0e0', borderRadius: 2 }}>
+        <Box component="form" onSubmit={handleAddTask} sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
           <TextField label="Title" fullWidth value={title} onChange={(e) => setTitle(e.target.value)} required />
           <TextField label="Description" fullWidth multiline rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
           
@@ -141,7 +149,16 @@ const AddTaskPage = () => {
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {selected.map((value) => (
-                    <Chip key={value} label={value} size="small" />
+                    <Chip
+                      key={value}
+                      label={value}
+                      size="small"
+                      sx={{
+                        bgcolor: `${getTagColor(value)}20`,
+                        color: getTagColor(value),
+                        border: `1px solid ${getTagColor(value)}`
+                      }}
+                    />
                   ))}
                 </Box>
               )}
@@ -155,6 +172,18 @@ const AddTaskPage = () => {
           </FormControl>
 
           {isStudyTask && (
+            <FormControl fullWidth>
+              <InputLabel>Study Scheduling</InputLabel>
+              <Select value={studyStrategy} label="Study Scheduling" onChange={(e) => setStudyStrategy(e.target.value)}>
+                <MenuItem value="none">Default (even split)</MenuItem>
+                <MenuItem value="lessons">Split by lesson count</MenuItem>
+                <MenuItem value="studyMode">Study Mode (Study → Review → Practice)</MenuItem>
+                {isExamTask && <MenuItem value="examCountdown">Exam Countdown (ramps up as the exam nears)</MenuItem>}
+              </Select>
+            </FormControl>
+          )}
+
+          {isStudyTask && studyStrategy === 'lessons' && (
             <TextField
               label="Number of lessons/lectures to study"
               type="number"
@@ -177,14 +206,16 @@ const AddTaskPage = () => {
               </Select>
             </FormControl>
             {recurrenceFrequency !== 'none' && (
-              <TextField
-                label="Repeat until (optional)"
-                type="date"
-                fullWidth
-                value={recurrenceEndDate}
-                onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                inputProps={{ min: deadline || getTodayString() }}
-              />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary' }}>Repeat until (optional)</Typography>
+                <TextField
+                  type="date"
+                  fullWidth
+                  value={recurrenceEndDate}
+                  onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                  inputProps={{ min: deadline || getTodayString() }}
+                />
+              </Box>
             )}
           </Box>
 

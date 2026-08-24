@@ -232,4 +232,71 @@ export const darkGardenTheme = createTheme({
   },
 });
 
+export const oceanTheme = createTheme({
+  palette: {
+    mode: 'light',
+    background: { default: '#EAF6FB', paper: '#FFFFFF' },
+    primary: { main: '#2196F3', dark: '#1565C0' },
+    secondary: { main: '#26C6DA' },
+    text: { primary: '#0D3B54', secondary: '#4A7A94' },
+  },
+});
+
+export const darkOceanTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    background: { default: '#071824', paper: '#0F2A3A' },
+    primary: { main: '#42A5F5', dark: '#1E88E5' },
+    secondary: { main: '#26C6DA' },
+    text: { primary: '#DCEEFA', secondary: '#8FB8CC' },
+  },
+});
+
+export const spaceTheme = createTheme({
+  palette: {
+    mode: 'light',
+    background: { default: '#F1EEFB', paper: '#FFFFFF' },
+    primary: { main: '#7C4DFF', dark: '#5E35B1' },
+    secondary: { main: '#FF4081' },
+    text: { primary: '#2A1B4D', secondary: '#6C5B8C' },
+  },
+});
+
+export const darkSpaceTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    background: { default: '#0A0518', paper: '#150E2B' },
+    primary: { main: '#B388FF', dark: '#7C4DFF' },
+    secondary: { main: '#FF4081' },
+    text: { primary: '#E5DEFF', secondary: '#A99BCB' },
+  },
+});
+
+export const minimalTheme = createTheme({
+  palette: {
+    mode: 'light',
+    background: { default: '#FAFAFA', paper: '#FFFFFF' },
+    primary: { main: '#212121', dark: '#000000' },
+    secondary: { main: '#757575' },
+    text: { primary: '#212121', secondary: '#757575' },
+  },
+});
+
+export const darkMinimalTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    background: { default: '#121212', paper: '#1E1E1E' },
+    primary: { main: '#E0E0E0', dark: '#BDBDBD' },
+    secondary: { main: '#9E9E9E' },
+    text: { primary: '#F5F5F5', secondary: '#B0B0B0' },
+  },
+});
+
+export const THEME_REGISTRY = {
+  garden: { label: '🌿 Garden', light: gardenTheme, dark: darkGardenTheme, swatch: '#69C37D' },
+  ocean: { label: '🌊 Ocean', light: oceanTheme, dark: darkOceanTheme, swatch: '#2196F3' },
+  space: { label: '🌌 Space', light: spaceTheme, dark: darkSpaceTheme, swatch: '#7C4DFF' },
+  minimal: { label: '⚪ Minimal', light: minimalTheme, dark: darkMinimalTheme, swatch: '#424242' },
+};
+
 export default gardenTheme;

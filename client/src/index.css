@@ -5,8 +5,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #F4FAF3;
-  color: #2E4634;
+  background-color: var(--app-bg, #F4FAF3);
+  color: var(--app-text, #2E4634);
 }
 
 code {
@@ -22,14 +22,14 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: #F4FAF3;
+  background: var(--app-bg, #F4FAF3);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #69C37D;
+  background: var(--app-scrollbar-thumb, #69C37D);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3F8F5A;
+  background: var(--app-scrollbar-thumb-hover, #3F8F5A);
 }

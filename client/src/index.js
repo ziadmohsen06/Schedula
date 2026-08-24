@@ -3,17 +3,14 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import gardenTheme from './theme';
+import RootThemeProvider from './components/RootThemeProvider';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <ThemeProvider theme={gardenTheme}>
-      <CssBaseline />
+    <RootThemeProvider>
       <App />
-    </ThemeProvider>
+    </RootThemeProvider>
   </React.StrictMode>
 );
 

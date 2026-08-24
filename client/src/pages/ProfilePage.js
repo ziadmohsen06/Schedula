@@ -17,7 +17,6 @@ const ProfilePage = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [darkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -70,7 +69,7 @@ const ProfilePage = () => {
           sx={{
             p: 3,
             border: '1px solid',
-            borderColor: darkMode ? '#333' : '#e0e0e0',
+            borderColor: 'divider',
             borderRadius: 2,
             display: 'flex',
             flexDirection: 'column',
@@ -104,7 +103,7 @@ const ProfilePage = () => {
                         bottom: 0,
                         right: 0,
                         bgcolor: 'primary.main',
-                        color: '#fff',
+                        color: 'primary.contrastText',
                         width: 32,
                         height: 32,
                         '&:hover': { bgcolor: 'primary.dark' }
@@ -122,7 +121,8 @@ const ProfilePage = () => {
           <Box sx={{ textAlign: 'center' }}>
             <Typography
               variant="h6"
-              sx={{ color: darkMode ? '#fff' : '#000', fontWeight: 'bold' }}
+              color="text.primary"
+              sx={{ fontWeight: 'bold' }}
             >
               {user?.name}
             </Typography>

@@ -9,7 +9,7 @@ const AuditLogSchema = new mongoose.Schema({
   action: {
     type: String,
     required: true,
-    enum: ['login', 'logout', 'register', 'task created', 'task deleted', 'task scheduled with AI']
+    enum: ['login', 'logout', 'register', 'task created', 'task deleted', 'task scheduled with AI', 'profile updated', 'updated daily preference']
   },
   ipAddress: {
     type: String,

@@ -45,6 +45,14 @@ const TaskSchema = new mongoose.Schema({
     type: Number,
     min: 1
   },
+  studyMode: {
+    type: Boolean,
+    default: false
+  },
+  examCountdown: {
+    type: Boolean,
+    default: false
+  },
   notes: [{
     text: String,
     createdAt: {
@@ -56,9 +64,13 @@ const TaskSchema = new mongoose.Schema({
     {
       date: Date,
       hoursPerDay: Number,
-      focus: String
+      focus: String,
+      hour: { type: Number, min: 0, max: 23 }
     }
   ],
+  completedAt: {
+    type: Date
+  },
   recurrence: {
     frequency: {
       type: String,

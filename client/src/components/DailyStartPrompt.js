@@ -8,9 +8,11 @@ import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import WbTwilightIcon from '@mui/icons-material/WbTwilight';
 import NightsStayIcon from '@mui/icons-material/NightsStay';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { useTheme, alpha } from '@mui/material/styles';
 import { getDailyPreference, updateDailyPreference } from '../services/api';
 
 const DailyStartPrompt = () => {
+  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -92,7 +94,7 @@ const DailyStartPrompt = () => {
       PaperProps={{
         sx: {
           borderRadius: 3,
-          background: 'linear-gradient(135deg, #f0faf0 0%, #FCFFFC 100%)',
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.12)} 0%, ${theme.palette.background.paper} 100%)`,
         }
       }}
     >

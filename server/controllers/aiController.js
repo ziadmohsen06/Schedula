@@ -4,7 +4,24 @@ dns.setServers(['8.8.8.8', '1.1.1.1']);
 const { CohereClient } = require('cohere-ai');
 const Task = require('../models/Task');
 const User = require('../models/User');
+const ClassSlot = require('../models/ClassSlot');
 const { logAuditEvent } = require('../utils/audit');
+
+const timeToMinutes = (time) => {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+};
+
+// Total scheduled class hours for a given weekday (0=Sunday), so workload
+// calculations can treat class time as unavailable study capacity.
+const classHoursByWeekday = (classSlots) => {
+  const hoursByDay = new Map();
+  classSlots.forEach((slot) => {
+    const hours = (timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime)) / 60;
+    hoursByDay.set(slot.dayOfWeek, (hoursByDay.get(slot.dayOfWeek) || 0) + hours);
+  });
+  return hoursByDay;
+};
 
 const toLocalISODate = (date) => {
   const y = date.getFullYear();
@@ -52,6 +69,87 @@ const distributeLessons = (lessonCount, estimatedHours, deadline) => {
   return scheduledDays;
 };
 
+// Splits a task into Study -> Review -> Practice sessions with widening gaps
+// between them (a simplified spaced-repetition pattern: recall is tested again
+// just as it starts to fade, then once more before the deadline). Falls back to
+// merging phases onto the same day when the deadline is too close to space them out.
+const generateStudyModeSchedule = (estimatedHours, deadline) => {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(deadline);
+  end.setHours(0, 0, 0, 0);
+
+  const totalDays = Math.max(1, Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1);
+  const lastDayOffset = totalDays - 1;
+
+  const phases = [
+    { label: 'Study', dayOffset: 0, weight: 0.5 },
+    { label: 'Review', dayOffset: Math.min(2, lastDayOffset), weight: 0.3 },
+    { label: 'Practice', dayOffset: Math.min(5, lastDayOffset), weight: 0.2 }
+  ];
+
+  const byDay = new Map();
+
+  phases.forEach((phase) => {
+    const date = new Date(start);
+    date.setDate(date.getDate() + phase.dayOffset);
+    const key = toLocalISODate(date);
+    const hours = Number((estimatedHours * phase.weight).toFixed(1));
+
+    if (byDay.has(key)) {
+      const existing = byDay.get(key);
+      existing.hoursPerDay = Number((existing.hoursPerDay + hours).toFixed(1));
+      existing.focus = `${existing.focus} + ${phase.label}`;
+    } else {
+      byDay.set(key, { date: key, hoursPerDay: hours, focus: phase.label });
+    }
+  });
+
+  return Array.from(byDay.values());
+};
+
+// A bounded revision countdown: covers at most the last MAX_COUNTDOWN_DAYS before
+// the exam, ramping hours up day-by-day so the heaviest revision lands right
+// before the deadline instead of being spread flat across the whole gap.
+const MAX_COUNTDOWN_DAYS = 14;
+
+const generateExamCountdownSchedule = (estimatedHours, deadline) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(deadline);
+  end.setHours(0, 0, 0, 0);
+
+  const daysUntilExam = Math.max(1, Math.floor((end - today) / (1000 * 60 * 60 * 24)) + 1);
+  const countdownDays = Math.min(daysUntilExam, MAX_COUNTDOWN_DAYS);
+
+  const start = new Date(end);
+  start.setDate(start.getDate() - (countdownDays - 1));
+  const actualStart = start < today ? today : start;
+  const actualDays = Math.floor((end - actualStart) / (1000 * 60 * 60 * 24)) + 1;
+
+  const weights = Array.from({ length: actualDays }, (_, i) => i + 1);
+  const weightSum = weights.reduce((a, b) => a + b, 0);
+
+  let allocated = 0;
+
+  return weights.map((weight, i) => {
+    const date = new Date(actualStart);
+    date.setDate(date.getDate() + i);
+    const isLast = i === actualDays - 1;
+    const hours = isLast
+      ? Number(Math.max(0, estimatedHours - allocated).toFixed(1))
+      : Number(((estimatedHours * weight) / weightSum).toFixed(1));
+    allocated += hours;
+
+    const daysLeft = actualDays - i - 1;
+    return {
+      date: toLocalISODate(date),
+      hoursPerDay: hours,
+      focus: daysLeft === 0 ? 'Final review before the exam' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left — ramp up revision`
+    };
+  }).filter((day) => day.hoursPerDay > 0);
+};
+
 const scheduleTask = async (req, res) => {
   const cohere = new CohereClient({
     token: process.env.COHERE_API_KEY
@@ -88,7 +186,11 @@ const scheduleTask = async (req, res) => {
 
     let scheduledDays = [];
 
-    if (task.lessonCount && task.lessonCount > 0) {
+    if (task.examCountdown) {
+      scheduledDays = generateExamCountdownSchedule(task.estimatedHours, task.deadline);
+    } else if (task.studyMode) {
+      scheduledDays = generateStudyModeSchedule(task.estimatedHours, task.deadline);
+    } else if (task.lessonCount && task.lessonCount > 0) {
       scheduledDays = distributeLessons(task.lessonCount, task.estimatedHours, task.deadline);
     } else try {
       if (process.env.COHERE_API_KEY) {
@@ -142,4 +244,147 @@ Total hours across all days must equal ${task.estimatedHours}.`
   }
 };
 
-module.exports = { scheduleTask };
+// Compares each of the next 7 days' already-scheduled hours (summed across all
+// active tasks' scheduledDays) against the user's normal daily capacity (derived
+// from their daily-start preference, same mapping used when scheduling a task).
+// Flags burnout risk when several days are overloaded, or one day is way over.
+const getWorkloadInsights = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const startPreference = user.dailyStartPreference || 'flexible';
+    const dailyCapacity = startPreference === 'early' ? 8 : startPreference === 'late' ? 6 : 7;
+
+    const tasks = await Task.find({ user: req.user._id, status: { $ne: 'completed' } });
+    const classSlots = await ClassSlot.find({ user: req.user._id });
+    const classHours = classHoursByWeekday(classSlots);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const overdueCount = tasks.filter((t) => new Date(t.deadline) < today).length;
+    const HORIZON_DAYS = 7;
+
+    const dayTotals = new Map();
+    const dayWeekdays = new Map();
+    for (let i = 0; i < HORIZON_DAYS; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      const key = toLocalISODate(d);
+      dayTotals.set(key, 0);
+      dayWeekdays.set(key, d.getDay());
+    }
+
+    tasks.forEach((task) => {
+      (task.scheduledDays || []).forEach((entry) => {
+        const key = toLocalISODate(new Date(entry.date));
+        if (dayTotals.has(key)) {
+          dayTotals.set(key, Number((dayTotals.get(key) + (entry.hoursPerDay || 0)).toFixed(1)));
+        }
+      });
+    });
+
+    const days = Array.from(dayTotals.entries()).map(([date, hours]) => {
+      const classHoursToday = Number((classHours.get(dayWeekdays.get(date)) || 0).toFixed(1));
+      const freeCapacity = Math.max(0, Number((dailyCapacity - classHoursToday).toFixed(1)));
+      return {
+        date,
+        hours,
+        classHours: classHoursToday,
+        freeCapacity,
+        overloaded: hours > freeCapacity
+      };
+    });
+
+    const overloadedCount = days.filter((d) => d.overloaded).length;
+    const peakDay = days.reduce((max, d) => (d.hours > (max?.hours || 0) ? d : max), null);
+
+    const scheduleOverloaded = overloadedCount >= 3 || (peakDay && peakDay.hours > peakDay.freeCapacity * 1.5);
+    const overdueOverloaded = overdueCount >= 5 || (tasks.length > 0 && overdueCount / tasks.length > 0.5);
+
+    let severity = null;
+    let title = null;
+    let suggestion = null;
+
+    if (scheduleOverloaded || overdueOverloaded) {
+      severity = 'error';
+      title = '🔥 Burnout Risk';
+      const parts = [];
+      if (scheduleOverloaded) {
+        parts.push(`${overloadedCount} day${overloadedCount === 1 ? '' : 's'} this week over your available capacity (peaking at ${peakDay.hours}h on ${peakDay.date}, ${peakDay.freeCapacity}h free that day)`);
+      }
+      if (overdueOverloaded) {
+        parts.push(`${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}`);
+      }
+      suggestion = `Your workload looks heavy — ${parts.join(' and ')}. Consider enabling Lazy Mode or rescheduling some lower-priority tasks.`;
+    } else if (overdueCount >= 3 || (peakDay && peakDay.overloaded)) {
+      severity = 'warning';
+      title = '⚠️ Workload Warning';
+      suggestion = overdueCount > 0
+        ? `You have ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}. Take a break and tackle them one at a time.`
+        : `${peakDay.date} is scheduled at ${peakDay.hours}h, over your ${peakDay.freeCapacity}h free that day (after classes). Consider spreading it out.`;
+    } else if (overdueCount > 0) {
+      severity = 'info';
+      title = '💡 Heads Up';
+      suggestion = `You have ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}. Try to complete ${overdueCount === 1 ? 'it' : 'them'} soon.`;
+    }
+
+    const burnoutRisk = severity === 'error';
+
+    res.status(200).json({
+      dailyCapacity, days, overloadedCount, overdueCount,
+      burnoutRisk, severity, title, suggestion
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to compute workload insights' });
+  }
+};
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// Deterministic pattern detection: groups all tasks by (tag, weekday-of-deadline)
+// and flags combinations with a high miss rate (overdue and never completed),
+// suggesting a weekday for that tag with a lower miss rate as an alternative.
+const getSmartSuggestions = async (req, res) => {
+  try {
+    const tasks = await Task.find({ user: req.user._id });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const groups = new Map();
+    tasks.forEach((task) => {
+      const weekday = new Date(task.deadline).getDay();
+      const missed = task.status !== 'completed' && new Date(task.deadline) < today;
+      (task.tags || []).forEach((tag) => {
+        const key = `${tag}|${weekday}`;
+        if (!groups.has(key)) groups.set(key, { tag, weekday, total: 0, missed: 0 });
+        const g = groups.get(key);
+        g.total += 1;
+        if (missed) g.missed += 1;
+      });
+    });
+
+    const allGroups = Array.from(groups.values());
+    const candidates = allGroups
+      .filter((g) => g.total >= 2 && g.missed / g.total >= 0.5)
+      .sort((a, b) => (b.missed / b.total) - (a.missed / a.total));
+
+    const suggestions = candidates.slice(0, 3).map((g) => {
+      const otherDays = allGroups.filter((o) => o.tag === g.tag && o.weekday !== g.weekday);
+      const better = otherDays.sort((a, b) => (a.missed / a.total) - (b.missed / b.total))[0];
+      const suggestedDay = better ? WEEKDAY_NAMES[better.weekday] : WEEKDAY_NAMES[(g.weekday + 1) % 7];
+
+      return {
+        tag: g.tag,
+        day: WEEKDAY_NAMES[g.weekday],
+        missedCount: g.missed,
+        totalCount: g.total,
+        message: `You tend to miss ${g.tag} tasks scheduled on ${WEEKDAY_NAMES[g.weekday]}s (${g.missed}/${g.total}). Consider moving them to ${suggestedDay} instead.`
+      };
+    });
+
+    res.status(200).json({ suggestions });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to compute suggestions' });
+  }
+};
+
+module.exports = { scheduleTask, getWorkloadInsights, getSmartSuggestions };

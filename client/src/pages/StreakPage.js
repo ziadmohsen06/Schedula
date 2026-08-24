@@ -4,9 +4,13 @@ import {
   Stack, Chip, CircularProgress, Alert
 } from '@mui/material';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import { alpha } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
 import { getCompletedTasks } from '../services/api';
 import AppShell from '../components/AppShell';
+import { useThemeName } from '../hooks/useThemeName';
+import { getThemeContent } from '../themeContent';
+import { THEME_REGISTRY } from '../theme';
 
 // ─── Plant Visual ───────────────────────────────────────────────────────────
 const PlantVisual = ({ streak, darkMode }) => {
@@ -213,8 +217,96 @@ const PlantVisual = ({ streak, darkMode }) => {
   );
 };
 
+// ─── Emoji Plant (alternate plant types) ────────────────────────────────────
+const PLANT_TYPES = {
+  default: { label: 'Garden', emoji: '🌿' },
+  cactus: { label: 'Cactus', emoji: '🌵' },
+  sunflower: { label: 'Sunflower', emoji: '🌻' },
+  cherry: { label: 'Cherry Blossom', emoji: '🌸' }
+};
+
+const EmojiPlantVisual = ({ streak, plantType }) => {
+  const level = Math.min(streak, 7);
+  const size = 48 + level * 14;
+  const plant = PLANT_TYPES[plantType] || PLANT_TYPES.default;
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
+      <style>{`
+        @keyframes emojiSway {
+          0%, 100% { transform: rotate(-4deg); }
+          50% { transform: rotate(4deg); }
+        }
+      `}</style>
+      <Box sx={{ position: 'relative', height: 180, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        {level >= 6 && <Typography sx={{ position: 'absolute', top: 10, left: '30%', fontSize: 16, opacity: 0.7 }}>✨</Typography>}
+        {level >= 6 && <Typography sx={{ position: 'absolute', top: 20, right: '28%', fontSize: 12, opacity: 0.6 }}>⭐</Typography>}
+        <Typography
+          sx={{
+            fontSize: level === 0 ? 40 : size,
+            transformOrigin: 'bottom center',
+            animation: level > 0 ? 'emojiSway 3s ease-in-out infinite' : 'none',
+            filter: level === 0 ? 'grayscale(1) opacity(0.6)' : 'none'
+          }}
+        >
+          {level === 0 ? '🥀' : plant.emoji}
+        </Typography>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
+        {level === 0 ? '🥀 Start completing tasks to grow your plant!' :
+          level <= 2 ? `🌱 Your ${plant.label.toLowerCase()} is sprouting!` :
+            level <= 4 ? `🍃 Growing steadily, keep going!` :
+              level <= 6 ? `🌺 Your ${plant.label.toLowerCase()} is thriving!` :
+                `🌟 A magnificent ${plant.label.toLowerCase()}! You're unstoppable!`}
+      </Typography>
+    </Box>
+  );
+};
+
+// ─── Theme-driven growth visual (ocean/space/minimal override the plant) ────
+const ThemeGrowthVisual = ({ streak, content }) => {
+  const level = Math.min(streak, 7);
+  const emoji = content.growthStages[level] || content.growthStages[content.growthStages.length - 1];
+  const size = 48 + level * 14;
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
+      <style>{`
+        @keyframes emojiSway {
+          0%, 100% { transform: rotate(-4deg); }
+          50% { transform: rotate(4deg); }
+        }
+      `}</style>
+      <Box sx={{ position: 'relative', height: 180, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        {level >= 6 && content.ambientEmojis[0] && (
+          <Typography sx={{ position: 'absolute', top: 10, left: '30%', fontSize: 16, opacity: 0.7 }}>{content.ambientEmojis[0]}</Typography>
+        )}
+        {level >= 6 && content.ambientEmojis[1] && (
+          <Typography sx={{ position: 'absolute', top: 20, right: '28%', fontSize: 12, opacity: 0.6 }}>{content.ambientEmojis[1]}</Typography>
+        )}
+        <Typography
+          sx={{
+            fontSize: level === 0 ? 40 : size,
+            transformOrigin: 'bottom center',
+            animation: level > 0 ? 'emojiSway 3s ease-in-out infinite' : 'none',
+          }}
+        >
+          {emoji}
+        </Typography>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
+        {level === 0 ? `Start completing tasks to grow ${content.plantSectionTitle.toLowerCase()}!` :
+          level <= 2 ? `Just getting started!` :
+            level <= 4 ? `Growing steadily, keep going!` :
+              level <= 6 ? `Really thriving now!` :
+                `Unstoppable! Incredible work.`}
+      </Typography>
+    </Box>
+  );
+};
+
 // ─── Contribution Grid (GitHub-style with leaves) ──────────────────────────
-const ContributionGrid = ({ tasks, darkMode }) => {
+const ContributionGrid = ({ tasks, darkMode, content, accentColor }) => {
   const weeks = 12;
   const days = 7;
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -240,20 +332,17 @@ const ContributionGrid = ({ tasks, darkMode }) => {
     grid.push(week);
   }
 
+  const emptyColor = darkMode ? alpha(accentColor, 0.12) : alpha(accentColor, 0.08);
   const getColor = (count) => {
-    if (count === 0) return darkMode ? '#1a2e1d' : '#e8f5e9';
-    if (count === 1) return '#a5d6a7';
-    if (count === 2) return '#69C37D';
-    if (count === 3) return '#4caf50';
-    return '#2e7d32';
+    if (count === 0) return emptyColor;
+    const opacity = Math.min(1, 0.35 + count * 0.22);
+    return `${accentColor}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
   };
 
   const getEmoji = (count) => {
     if (count === 0) return null;
-    if (count === 1) return '🌱';
-    if (count === 2) return '🌿';
-    if (count >= 3) return '🍃';
-    return null;
+    const idx = Math.min(count, content.contributionEmojis.length - 1);
+    return content.contributionEmojis[idx];
   };
 
   return (
@@ -322,12 +411,21 @@ const StreakPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [plantType, setPlantType] = useState(() => localStorage.getItem('plantType') || 'default');
+  const themeName = useThemeName();
+  const content = getThemeContent(themeName);
+  const accentColor = (THEME_REGISTRY[themeName] || THEME_REGISTRY.garden).swatch;
 
   useEffect(() => {
     const sync = () => setDarkMode(localStorage.getItem('darkMode') === 'true');
     window.addEventListener('darkModeChanged', sync);
     return () => window.removeEventListener('darkModeChanged', sync);
   }, []);
+
+  const handleSelectPlant = (type) => {
+    setPlantType(type);
+    localStorage.setItem('plantType', type);
+  };
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -345,7 +443,7 @@ const StreakPage = () => {
 
   const totalCompleted = tasks.length;
   const currentStreak = Math.max(0, Math.min(7, Math.round(totalCompleted / 2)));
-  const momentum = totalCompleted >= 5 ? 'Strong 🔥' : totalCompleted >= 2 ? 'Building 🌿' : 'Starting 🌱';
+  const momentum = totalCompleted >= 5 ? 'Strong 🔥' : totalCompleted >= 2 ? `Building ${content.goodDayEmoji}` : `Starting ${content.growthStages[1]}`;
 
   const recentDays = Array.from({ length: 7 }, (_, index) => {
     const dayLabel = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index];
@@ -360,14 +458,14 @@ const StreakPage = () => {
           <Typography variant="h4" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <LocalFireDepartmentIcon sx={{ color: '#ff6f00' }} /> Streak
           </Typography>
-          <Typography color="text.secondary">Keep completing tasks to grow your plant! 🌱</Typography>
+          <Typography color="text.secondary">Keep completing tasks to grow {content.plantSectionTitle.toLowerCase()}! {content.goodDayEmoji}</Typography>
         </Box>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress sx={{ color: '#69C37D' }} />
+            <CircularProgress color="primary" />
           </Box>
         ) : (
           <Stack spacing={3}>
@@ -388,8 +486,54 @@ const StreakPage = () => {
             {/* Plant + week grid side by side */}
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <Paper sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Typography variant="h6" sx={{ mb: 1 }}>🌱 Your Plant</Typography>
-                <PlantVisual streak={currentStreak} darkMode={darkMode} />
+                <Typography variant="h6" sx={{ mb: 1 }}>{content.logoEmoji} {content.plantSectionTitle}</Typography>
+                {themeName !== 'garden' ? (
+                  <ThemeGrowthVisual streak={currentStreak} content={content} />
+                ) : plantType === 'default' ? (
+                  <PlantVisual streak={currentStreak} darkMode={darkMode} />
+                ) : (
+                  <EmojiPlantVisual streak={currentStreak} plantType={plantType} />
+                )}
+
+                {themeName === 'garden' && (
+                  <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
+                    {Object.entries(PLANT_TYPES).map(([key, p]) => (
+                      <Box
+                        key={key}
+                        onClick={() => handleSelectPlant(key)}
+                        title={p.label}
+                        sx={{
+                          cursor: 'pointer', fontSize: 18, p: 0.5, borderRadius: 1,
+                          border: '2px solid', borderColor: plantType === key ? 'primary.main' : 'transparent',
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        {p.emoji}
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+
+                <Box sx={{ mt: 2, width: '100%' }}>
+                  <Typography variant="body2" fontWeight="bold" sx={{ mb: 1, textAlign: 'center' }}>{content.decorationsTitle}</Typography>
+                  <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    {content.decorations.map((d) => {
+                      const unlocked = totalCompleted >= d.threshold;
+                      return (
+                        <Box
+                          key={d.label}
+                          title={unlocked ? d.label : `Unlock at ${d.threshold} completed tasks (${d.threshold - totalCompleted} to go)`}
+                          sx={{
+                            fontSize: 22, opacity: unlocked ? 1 : 0.25,
+                            filter: unlocked ? 'none' : 'grayscale(1)'
+                          }}
+                        >
+                          {d.emoji}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
               </Paper>
 
               <Paper sx={{ p: 3, flex: 1 }}>
@@ -405,19 +549,18 @@ const StreakPage = () => {
                         borderRadius: 2,
                         textAlign: 'center',
                         bgcolor: day.active
-                          ? (darkMode ? '#1b3a1f' : '#e8f5e9')
-                          : (darkMode ? '#1a1a1a' : '#f5f5f5'),
-                        border: day.active
-                          ? `2px solid ${darkMode ? '#4caf50' : '#69C37D'}`
-                          : `1px solid ${darkMode ? '#333' : '#e0e0e0'}`,
+                          ? (theme) => alpha(theme.palette.primary.main, 0.15)
+                          : 'action.hover',
+                        border: day.active ? '2px solid' : '1px solid',
+                        borderColor: day.active ? 'primary.main' : 'divider',
                         transition: 'all 0.2s ease'
                       }}
                     >
-                      <Typography variant="caption" sx={{ color: darkMode ? '#aaa' : '#6C7A6D', display: 'block' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                         {day.dayLabel}
                       </Typography>
                       <Typography sx={{ fontSize: 18, lineHeight: 1.4 }}>
-                        {day.active ? '🍃' : '○'}
+                        {day.active ? content.weekActiveEmoji : '○'}
                       </Typography>
                     </Box>
                   ))}
@@ -427,12 +570,7 @@ const StreakPage = () => {
                 <Box sx={{ mt: 3 }}>
                   <Typography variant="body2" fontWeight="bold" sx={{ mb: 1 }}>Milestones</Typography>
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {[
-                      { count: 1, label: '1st task', emoji: '🌱' },
-                      { count: 5, label: '5 tasks', emoji: '🌿' },
-                      { count: 10, label: '10 tasks', emoji: '🍃' },
-                      { count: 20, label: '20 tasks', emoji: '🌳' },
-                    ].map(milestone => (
+                    {content.milestoneChips.map(milestone => (
                       <Chip
                         key={milestone.count}
                         label={`${milestone.emoji} ${milestone.label}`}
@@ -449,11 +587,11 @@ const StreakPage = () => {
 
             {/* Contribution grid */}
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>🌿 Contribution Garden</Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>{content.contributionTitle}</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Each leaf represents tasks completed that day. Hover over a cell to see details.
+                Each mark represents tasks completed that day. Hover over a cell to see details.
               </Typography>
-              <ContributionGrid tasks={tasks} darkMode={darkMode} />
+              <ContributionGrid tasks={tasks} darkMode={darkMode} content={content} accentColor={accentColor} />
             </Paper>
 
             {/* Recent wins */}
@@ -461,7 +599,7 @@ const StreakPage = () => {
               <Typography variant="h6" sx={{ mb: 1 }}>🏆 Recent Wins</Typography>
               {tasks.length === 0 ? (
                 <Box sx={{ textAlign: 'center', py: 3 }}>
-                  <Typography variant="h3">🌱</Typography>
+                  <Typography variant="h3">{content.emptyStateEmoji}</Typography>
                   <Typography color="text.secondary" sx={{ mt: 1 }}>
                     Complete a task to start building your streak!
                   </Typography>

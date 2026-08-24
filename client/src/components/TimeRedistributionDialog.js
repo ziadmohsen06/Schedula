@@ -9,19 +9,17 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
+import { alpha } from '@mui/material/styles';
 import { rescheduleTask, scheduleTask } from '../services/api';
+import { useThemeName } from '../hooks/useThemeName';
+import { getThemeContent } from '../themeContent';
 
 const TimeRedistributionDialog = ({ open, onClose, completedTask, allTasks, onRedistributed }) => {
+  const themeName = useThemeName();
+  const content = getThemeContent(themeName);
   const [distribution, setDistribution] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
-
-  useEffect(() => {
-    const syncDarkMode = () => setDarkMode(localStorage.getItem('darkMode') === 'true');
-    window.addEventListener('darkModeChanged', syncDarkMode);
-    return () => window.removeEventListener('darkModeChanged', syncDarkMode);
-  }, []);
 
   useEffect(() => {
     if (open && completedTask && allTasks.length > 0) {
@@ -114,45 +112,44 @@ const TimeRedistributionDialog = ({ open, onClose, completedTask, allTasks, onRe
       PaperProps={{
         sx: {
           borderRadius: 3,
-          bgcolor: darkMode ? '#162418' : '#FCFFFC',
-          background: darkMode 
-            ? 'linear-gradient(135deg, #1a3320 0%, #162418 100%)'
-            : 'linear-gradient(135deg, #f0faf0 0%, #FCFFFC 100%)',
+          bgcolor: 'background.paper',
         }
       }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="h6" sx={{ color: darkMode ? '#d4edda' : 'inherit' }}>
+          <Typography variant="h6" color="text.primary">
             ⏱ Time Redistribution
           </Typography>
-          <Typography variant="body2" sx={{ color: darkMode ? '#8fac93' : 'text.secondary' }}>
+          <Typography variant="body2" color="text.secondary">
             You finished early! Spread the extra time to other tasks
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small" sx={{ color: darkMode ? '#8fac93' : 'inherit' }}>
+        <IconButton onClick={onClose} size="small" sx={{ color: 'text.secondary' }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
 
       <DialogContent>
         {completedTask && (
-          <Paper sx={{ 
-            p: 2, 
-            mb: 2, 
-            bgcolor: darkMode ? '#1a2e1a' : '#e8f5e9', 
-            border: '2px solid #4caf50',
+          <Paper sx={{
+            p: 2,
+            mb: 2,
+            bgcolor: 'success.main',
+            opacity: 0.15,
+            border: '2px solid',
+            borderColor: 'success.main',
             borderRadius: 2,
             display: 'flex',
             alignItems: 'center',
             gap: 1.5,
           }}>
-            <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 32 }} />
+            <CheckCircleIcon color="success" sx={{ fontSize: 32 }} />
             <Box>
-              <Typography variant="body1" fontWeight="bold" sx={{ color: darkMode ? '#81c784' : '#2e7d32' }}>
+              <Typography variant="body1" fontWeight="bold" color="success.dark">
                 ✅ Completed: {completedTask.title}
               </Typography>
-              <Typography variant="body2" sx={{ color: darkMode ? '#a5d6a7' : '#2e7d32', mt: 0.5 }}>
+              <Typography variant="body2" color="success.dark" sx={{ mt: 0.5 }}>
                 Extra time available: {completedTask.estimatedHours} hours
               </Typography>
             </Box>
@@ -160,7 +157,7 @@ const TimeRedistributionDialog = ({ open, onClose, completedTask, allTasks, onRe
         )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <Typography variant="body2" fontWeight="bold" sx={{ color: darkMode ? '#d4edda' : 'inherit' }}>
+          <Typography variant="body2" fontWeight="bold" color="text.primary">
             Remaining to distribute:
           </Typography>
           <Chip 
@@ -174,12 +171,8 @@ const TimeRedistributionDialog = ({ open, onClose, completedTask, allTasks, onRe
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         {availableTasks.length === 0 ? (
-          <Typography variant="body2" sx={{ 
-            textAlign: 'center', 
-            py: 3,
-            color: darkMode ? '#8fac93' : 'text.secondary'
-          }}>
-            No other active tasks to redistribute time to. Enjoy your free time! 🌿
+          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+            No other active tasks to redistribute time to. Enjoy your free time! {content.goodDayEmoji}
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxHeight: 350, overflowY: 'auto', pr: 1 }}>
@@ -189,55 +182,57 @@ const TimeRedistributionDialog = ({ open, onClose, completedTask, allTasks, onRe
                 sx={{
                   p: 1.5,
                   transition: 'all 0.2s ease',
-                  border: (distribution[task._id] || 0) > 0 
-                    ? '2px solid #69C37D' 
-                    : `1px solid ${darkMode ? '#333' : '#e0e0e0'}`,
+                  border: (distribution[task._id] || 0) > 0
+                    ? '2px solid'
+                    : '1px solid',
+                  borderColor: (distribution[task._id] || 0) > 0 ? 'primary.main' : 'divider',
                   bgcolor: (distribution[task._id] || 0) > 0
-                    ? (darkMode ? 'rgba(105, 195, 125, 0.15)' : 'rgba(105, 195, 125, 0.1)')
-                    : (darkMode ? '#1a1a1a' : '#fafafa'),
+                    ? (theme) => alpha(theme.palette.primary.main, 0.1)
+                    : 'action.hover',
                   '&:hover': {
-                    borderColor: '#69C37D',
+                    borderColor: 'primary.main',
                   },
                 }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="body2" fontWeight="bold" sx={{ color: darkMode ? '#d4edda' : 'inherit' }}>
+                    <Typography variant="body2" fontWeight="bold" color="text.primary">
                       {task.title}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: darkMode ? '#8fac93' : 'text.secondary' }}>
+                    <Typography variant="caption" color="text.secondary">
                       Current: {task.estimatedHours} hrs | Priority: {task.priority}
                     </Typography>
                   </Box>
-                  
+
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <IconButton
                       size="small"
                       onClick={() => handleRemoveHours(task._id)}
                       disabled={loading || (distribution[task._id] || 0) <= 0}
-                      sx={{ 
-                        border: `1px solid ${darkMode ? '#555' : '#ccc'}`,
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
                         '&:hover': { bgcolor: 'rgba(255,0,0,0.1)' },
                       }}
                     >
                       <RemoveIcon fontSize="small" />
                     </IconButton>
-                    
-                    <Typography variant="body2" fontWeight="bold" sx={{ 
-                      minWidth: 50, 
+
+                    <Typography variant="body2" fontWeight="bold" color="text.primary" sx={{
+                      minWidth: 50,
                       textAlign: 'center',
-                      color: darkMode ? '#d4edda' : 'inherit',
                     }}>
                       {distribution[task._id] || 0}h
                     </Typography>
-                    
+
                     <IconButton
                       size="small"
                       onClick={() => handleAddHours(task._id)}
                       disabled={loading || remainingHours <= 0}
-                      sx={{ 
-                        border: `1px solid ${darkMode ? '#555' : '#ccc'}`,
-                        '&:hover': { bgcolor: 'rgba(105, 195, 125, 0.1)' },
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        '&:hover': { bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1) },
                       }}
                     >
                       <AddIcon fontSize="small" />
@@ -250,8 +245,8 @@ const TimeRedistributionDialog = ({ open, onClose, completedTask, allTasks, onRe
         )}
       </DialogContent>
 
-      <DialogActions sx={{ borderTop: `1px solid ${darkMode ? '#333' : '#e0e0e0'}`, px: 3, py: 2 }}>
-        <Button onClick={onClose} disabled={loading} sx={{ color: darkMode ? '#8fac93' : 'inherit' }}>
+      <DialogActions sx={{ borderTop: '1px solid', borderColor: 'divider', px: 3, py: 2 }}>
+        <Button onClick={onClose} disabled={loading} color="inherit">
           Skip
         </Button>
         <Button

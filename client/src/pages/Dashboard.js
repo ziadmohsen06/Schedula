@@ -1,21 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Container, Box, Typography, Button,
+  Container, Box, Typography, Button, ButtonBase,
   Card, CardContent, CardActions, Chip, Alert, CircularProgress,
   Stack, Paper, MenuItem, Select, FormControl, InputLabel,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Snackbar
 } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
+import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
-import { getTasks, getCompletedTasks, deleteTask, scheduleTask, rescheduleTask, completeTask } from '../services/api';
+import { getTasks, getCompletedTasks, deleteTask, scheduleTask, rescheduleTask, completeTask, getWorkloadInsights, getMood, getSmartSuggestions } from '../services/api';
 import AppShell from '../components/AppShell';
 import { getDeadlineStatus, formatDeadline } from '../utils/dateUtils';
 import { playLeafSound, isSoundEnabled } from '../utils/soundUtils';
+import { startFocusSound, stopFocusSound } from '../utils/focusSound';
+import { useThemeName } from '../hooks/useThemeName';
+import { getThemeContent } from '../themeContent';
 
-const LeafConfetti = ({ active }) => {
-  const leaves = ['🍃', '🌿', '🍀', '🌱', '🍁'];
-  if (!active) return null;
+const LeafConfetti = ({ active, emojis }) => {
+  const leaves = emojis !== undefined ? emojis : ['🍃', '🌿', '🍀', '🌱', '🍁'];
+  if (!active || leaves.length === 0) return null;
   return (
     <Box sx={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999, overflow: 'hidden' }}>
       {Array.from({ length: 20 }).map((_, i) => (
@@ -40,6 +44,9 @@ const LeafConfetti = ({ active }) => {
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const themeName = useThemeName();
+  const content = getThemeContent(themeName);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -47,6 +54,7 @@ const Dashboard = () => {
   const [sortOrder, setSortOrder] = useState('priority-high');
   const [focusTime, setFocusTime] = useState(() => (localStorage.getItem('lazyMode') === 'true' ? 15 * 60 : 25 * 60));
   const [isFocusRunning, setIsFocusRunning] = useState(false);
+  const [focusSound, setFocusSound] = useState('off');
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [scheduleTaskId, setScheduleTaskId] = useState(null);
   const [scheduleDeadline, setScheduleDeadline] = useState('');
@@ -59,12 +67,25 @@ const Dashboard = () => {
     overdueCount: 0,
     highPriorityCount: 0
   });
+  const [workload, setWorkload] = useState(null);
+  const [mood, setMood] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [milestoneMessage, setMilestoneMessage] = useState('');
+  const shownMilestonesRef = useRef(new Set());
 
   useEffect(() => {
     if (!user) return navigate('/login');
-    fetchTasks();
-    fetchStats();
+    fetchTasksAndStats();
+    fetchWorkload();
+    fetchMood();
+    fetchSuggestions();
   }, [user, navigate]);
+
+  useEffect(() => {
+    const handleMoodUpdated = (e) => setMood(e.detail.mood);
+    window.addEventListener('moodUpdated', handleMoodUpdated);
+    return () => window.removeEventListener('moodUpdated', handleMoodUpdated);
+  }, []);
 
   useEffect(() => {
     const syncLazy = () => {
@@ -77,6 +98,12 @@ const Dashboard = () => {
     return () => window.removeEventListener('lazyModeChanged', syncLazy);
   }, []);
 
+  const toggleLazyMode = () => {
+    const next = !lazyMode;
+    localStorage.setItem('lazyMode', next);
+    window.dispatchEvent(new Event('lazyModeChanged'));
+  };
+
   useEffect(() => {
     if (!isFocusRunning) return;
     const timer = setInterval(() => {
@@ -88,10 +115,28 @@ const Dashboard = () => {
     return () => clearInterval(timer);
   }, [isFocusRunning]);
 
-  const fetchTasks = async () => {
+  useEffect(() => {
+    if (isFocusRunning && focusSound !== 'off') {
+      startFocusSound(focusSound);
+    } else {
+      stopFocusSound();
+    }
+    return () => stopFocusSound();
+  }, [isFocusRunning, focusSound]);
+
+  // Fetches active + completed tasks together and derives stats from that one
+  // pair, instead of computing stats from whatever `tasks` state happens to be
+  // at the time — fetchTasks() and fetchStats() used to run independently, so
+  // if the completed-tasks request resolved first, stats were computed against
+  // a stale/empty active-tasks list (e.g. showing 100% complete with an active
+  // task still open).
+  const fetchTasksAndStats = async () => {
     try {
-      const { data } = await getTasks();
-      setTasks(data);
+      const [tasksRes, completedRes] = await Promise.all([getTasks(), getCompletedTasks()]);
+      const activeTasks = tasksRes.data;
+      const completedList = completedRes.data.tasks || completedRes.data;
+      setTasks(activeTasks);
+      calculateStats(activeTasks, completedList);
     } catch (err) {
       setError('Failed to load tasks');
     } finally {
@@ -99,72 +144,58 @@ const Dashboard = () => {
     }
   };
 
-  const fetchStats = async () => {
+  const fetchWorkload = async () => {
     try {
-      const { data } = await getCompletedTasks();
-      const completedList = data.tasks || data;
-      calculateStats(completedList);
+      const { data } = await getWorkloadInsights();
+      setWorkload(data);
     } catch (err) {
-      console.log('Failed to fetch stats');
+      // non-critical widget; fail silently
     }
   };
 
-  const calculateStats = (completed) => {
+  const fetchMood = async () => {
+    try {
+      const { data } = await getMood();
+      setMood(data.mood);
+    } catch (err) {
+      // non-critical
+    }
+  };
+
+  const fetchSuggestions = async () => {
+    try {
+      const { data } = await getSmartSuggestions();
+      setSuggestions(data.suggestions || []);
+    } catch (err) {
+      // non-critical
+    }
+  };
+
+  const calculateStats = (activeTasks, completed) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const overdue = tasks.filter(t => new Date(t.deadline) < today);
-    const highPriority = tasks.filter(t => ['high', 'urgent'].includes(t.priority));
+
+    const overdue = activeTasks.filter(t => new Date(t.deadline) < today);
+    const highPriority = activeTasks.filter(t => ['high', 'urgent'].includes(t.priority));
     const completedCount = completed.length || 0;
-    const totalTasks = tasks.length + completedCount;
-    
+    const totalTasks = activeTasks.length + completedCount;
+
+    const completionRate = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
+
+    if (completedCount > 0 && completedCount % 10 === 0 && !shownMilestonesRef.current.has(completedCount)) {
+      shownMilestonesRef.current.add(completedCount);
+      const message = content.milestoneMessages[Math.floor(Math.random() * content.milestoneMessages.length)];
+      setMilestoneMessage(`${completedCount} tasks completed! ${message}`);
+    }
+
     setStats({
       totalTasks,
       completedCount,
-      completionRate: totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0,
+      completionRate,
       overdueCount: overdue.length,
       highPriorityCount: highPriority.length
     });
   };
-
-  const getBurnoutWarning = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const overdueTasks = tasks.filter(t => new Date(t.deadline) < today);
-    const totalTasks = tasks.length;
-    
-    if (totalTasks === 0) return null;
-    
-    const overdueRatio = overdueTasks.length / totalTasks;
-    
-    if (overdueTasks.length >= 5 || overdueRatio > 0.5) {
-      return {
-        level: 'high',
-        severity: 'error',
-        title: '🔥 Burnout Risk!',
-        message: `You have ${overdueTasks.length} overdue tasks. Consider rescheduling some to avoid burnout.`
-      };
-    } else if (overdueTasks.length >= 3 || overdueRatio > 0.3) {
-      return {
-        level: 'medium',
-        severity: 'warning',
-        title: '⚠️ Workload Warning',
-        message: `You have ${overdueTasks.length} overdue tasks. Take a break and tackle them one at a time.`
-      };
-    } else if (overdueTasks.length > 0) {
-      return {
-        level: 'low',
-        severity: 'info',
-        title: '💡 Heads Up',
-        message: `You have ${overdueTasks.length} overdue task${overdueTasks.length > 1 ? 's' : ''}. Try to complete them soon.`
-      };
-    }
-    
-    return null;
-  };
-
-  const burnoutWarning = getBurnoutWarning();
 
   const handleDelete = async (id) => {
     try {
@@ -186,9 +217,9 @@ const Dashboard = () => {
       await new Promise(resolve => setTimeout(resolve, 500));
       
       await completeTask(id);
-      setTasks(tasks.filter(task => task._id !== id));
+      setTasks((prev) => prev.filter(task => task._id !== id));
       setCompletingId(null);
-      fetchStats();
+      fetchTasksAndStats();
     } catch (err) {
       setError('Failed to complete task');
       setCompletingId(null);
@@ -275,7 +306,18 @@ const Dashboard = () => {
         }
       `}</style>
 
-      <LeafConfetti active={showConfetti} />
+      <LeafConfetti active={showConfetti} emojis={content.ambientEmojis} />
+
+      <Snackbar
+        open={!!milestoneMessage}
+        autoHideDuration={5000}
+        onClose={() => setMilestoneMessage('')}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert severity="success" variant="filled" onClose={() => setMilestoneMessage('')} sx={{ fontWeight: 'bold' }}>
+          🎉 {milestoneMessage}
+        </Alert>
+      </Snackbar>
 
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -283,7 +325,7 @@ const Dashboard = () => {
             <Typography variant="h4" fontWeight="bold">
               {new Date().getHours() < 12 ? '☀️ Good Morning' : new Date().getHours() < 17 ? '🌤 Good Afternoon' : '🌙 Good Evening'}, {user?.name}
             </Typography>
-            <Typography color="text.secondary">Today feels like a great day to grow 🌿</Typography>
+            <Typography color="text.secondary">{content.growSubtitle}</Typography>
           </Box>
           {lazyMode && (
             <Chip label="🌙 Lazy Mode" sx={{ bgcolor: '#3949ab', color: '#fff', fontWeight: 'bold' }} />
@@ -293,31 +335,68 @@ const Dashboard = () => {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         {/* Burnout Warning */}
-        {burnoutWarning && (
-          <Alert 
-            severity={burnoutWarning.severity}
+        {workload?.severity && (
+          <Alert
+            severity={workload.severity}
             icon={<WarningIcon />}
             sx={{ mb: 3 }}
+            action={
+              workload.burnoutRisk && !lazyMode ? (
+                <Button color="inherit" size="small" onClick={toggleLazyMode}>
+                  Enable Lazy Mode
+                </Button>
+              ) : undefined
+            }
           >
             <Typography variant="body2" fontWeight="bold">
-              {burnoutWarning.title}
+              {workload.title}
             </Typography>
             <Typography variant="body2">
-              {burnoutWarning.message}
+              {workload.suggestion}
             </Typography>
           </Alert>
         )}
 
+        {/* AI Insights: briefing + smart suggestions together, one voice */}
+        <Paper sx={{
+          p: 2, mb: 3,
+          background: 'linear-gradient(135deg, rgba(105,195,125,0.08) 0%, rgba(246,196,83,0.06) 100%)',
+          position: 'relative', overflow: 'hidden'
+        }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>🤖 AI Insights</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {(() => {
+              const taskName = topTask ? `"${topTask.title}"` : 'your most important task';
+              if (mood === 'stressed') return `😥 Sounds like a tough day. Consider Lazy Mode and just tackle ${taskName} — the rest can wait.`;
+              if (mood === 'tired') return `😴 Low energy today? Ease in with ${taskName} and take breaks between tasks.`;
+              if (lazyMode) return `🌙 Lazy Mode is on. Focus on ${taskName} first.`;
+              if (mood === 'great') return `✨ Great energy today — a good day to make real progress on ${taskName}.`;
+              return `${content.goodDayEmoji} Looks like a good day. Start with ${taskName}.`;
+            })()}
+          </Typography>
+
+          {suggestions.length > 0 && (
+            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 0.5 }}>💡 Worth noticing</Typography>
+              {suggestions.map((s, i) => (
+                <Typography key={i} variant="body2" color="text.secondary" sx={{ mb: i < suggestions.length - 1 ? 0.5 : 0 }}>
+                  {s.message}
+                </Typography>
+              ))}
+            </Box>
+          )}
+        </Paper>
+
         {/* Stats Card */}
-        <Paper sx={{ 
-          p: 2, 
-          mb: 3, 
+        <Paper sx={{
+          p: 2,
+          mb: 3,
           background: 'linear-gradient(135deg, rgba(105,195,125,0.1) 0%, rgba(246,196,83,0.08) 100%)',
           border: '1px solid rgba(105,195,125,0.3)',
           borderRadius: 2,
         }}>
           <Typography variant="h6" sx={{ mb: 2 }}>📊 Progress Overview</Typography>
-          
+
           <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 2 }}>
             <Box sx={{ flex: 1, minWidth: 100, textAlign: 'center' }}>
               <Typography variant="h4" fontWeight="bold" color="primary.main">
@@ -344,94 +423,106 @@ const Dashboard = () => {
               <Typography variant="caption" color="text.secondary">High Priority</Typography>
             </Box>
           </Box>
-          
-          <Box sx={{ 
-            width: '100%', 
-            height: 10, 
-            bgcolor: 'rgba(105,195,125,0.2)', 
+
+          <Box sx={{
+            width: '100%',
+            height: 10,
+            bgcolor: 'rgba(105,195,125,0.2)',
             borderRadius: 5,
             overflow: 'hidden',
           }}>
-            <Box sx={{ 
-              width: `${stats.completionRate}%`, 
-              height: '100%', 
-              background: 'linear-gradient(90deg, #69C37D, #3F8F5A)',
+            <Box sx={{
+              width: `${stats.completionRate}%`,
+              height: '100%',
+              background: `linear-gradient(90deg, ${theme.palette.primary.light}, ${theme.palette.primary.main})`,
               transition: 'width 0.5s ease',
               borderRadius: 5,
             }} />
           </Box>
-          
+
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', textAlign: 'right' }}>
             {stats.completedCount} of {stats.totalTasks} tasks completed
           </Typography>
         </Paper>
 
+        {/* Quick Actions */}
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Quick Actions</Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 4 }}>
-          <Paper sx={{
-            flex: 1, p: 2,
-            borderLeft: '4px solid #69C37D',
-            position: 'relative', overflow: 'hidden',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-            '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(63,143,90,0.15)' }
-          }}>
+          <Paper
+            component={ButtonBase}
+            onClick={() => navigate('/calendar')}
+            sx={{
+              flex: 1, p: 2, textAlign: 'left', display: 'block',
+              borderLeft: '4px solid', borderColor: 'primary.main',
+              position: 'relative', overflow: 'hidden',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': { transform: 'translateY(-3px)', boxShadow: `0 8px 24px ${theme.palette.primary.main}26` }
+            }}
+          >
             <Typography variant="subtitle2" color="text.secondary">🧠 Smart Workload</Typography>
             <Typography variant="h6">Balanced across your week</Typography>
             <Typography variant="body2" color="text.secondary">Schedula spreads heavy work to keep your days realistic.</Typography>
+            <Typography sx={{ position: 'absolute', top: 12, right: 14, color: 'text.secondary' }}>›</Typography>
           </Paper>
-          <Paper sx={{
-            flex: 1, p: 2,
-            borderLeft: lazyMode ? '4px solid #3949ab' : '4px solid #3F8F5A',
-            position: 'relative', overflow: 'hidden',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-            '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(63,143,90,0.15)' }
-          }}>
-            <Typography variant="subtitle2" color="text.secondary">{lazyMode ? '🌙 Lazy Mode ON' : '🍃 Lazy Mode'}</Typography>
+          <Paper
+            component={ButtonBase}
+            onClick={toggleLazyMode}
+            sx={{
+              flex: 1, p: 2, textAlign: 'left', display: 'block',
+              borderLeft: '4px solid', borderColor: lazyMode ? 'secondary.main' : 'primary.dark',
+              position: 'relative', overflow: 'hidden',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': { transform: 'translateY(-3px)', boxShadow: `0 8px 24px ${theme.palette.primary.main}26` }
+            }}
+          >
+            <Typography variant="subtitle2" color="text.secondary">{lazyMode ? '🌙 Lazy Mode ON' : `${content.goodDayEmoji} Lazy Mode`}</Typography>
             <Typography variant="h6">{lazyMode ? 'Easy day active' : 'Easy day mode'}</Typography>
             <Typography variant="body2" color="text.secondary">
-              {lazyMode ? 'Focus timer is 15 min. Take it easy today.' : 'Toggle the crescent moon in the header to activate.'}
+              {lazyMode ? 'Tap to turn off. Focus timer is 15 min.' : 'Tap to activate an easier day.'}
             </Typography>
+            <Typography sx={{ position: 'absolute', top: 12, right: 14, color: 'text.secondary' }}>›</Typography>
           </Paper>
-          <Paper sx={{
-            flex: 1, p: 2,
-            borderLeft: '4px solid #F6C453',
-            position: 'relative', overflow: 'hidden',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-            '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 8px 24px rgba(246,196,83,0.15)' }
-          }}>
-            <Typography variant="subtitle2" color="text.secondary">🌱 Progress</Typography>
+          <Paper
+            component={ButtonBase}
+            onClick={() => navigate('/streak')}
+            sx={{
+              flex: 1, p: 2, textAlign: 'left', display: 'block',
+              borderLeft: '4px solid', borderColor: 'secondary.main',
+              position: 'relative', overflow: 'hidden',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': { transform: 'translateY(-3px)', boxShadow: `0 8px 24px ${theme.palette.secondary.main}26` }
+            }}
+          >
+            <Typography variant="subtitle2" color="text.secondary">{content.progressCardEmoji} Progress</Typography>
             <Typography variant="h6">Stay consistent</Typography>
             <Typography variant="body2" color="text.secondary">You have {tasks.length} task{tasks.length === 1 ? '' : 's'} in view.</Typography>
+            <Typography sx={{ position: 'absolute', top: 12, right: 14, color: 'text.secondary' }}>›</Typography>
           </Paper>
         </Stack>
-
-        <Paper sx={{
-          p: 2, mb: 3,
-          background: 'linear-gradient(135deg, rgba(105,195,125,0.08) 0%, rgba(246,196,83,0.06) 100%)',
-          position: 'relative', overflow: 'hidden'
-        }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>🌤 AI Daily Briefing</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {lazyMode 
-              ? `🌙 Lazy Mode is on. Focus on ${topTask ? topTask.title : 'your most important task'} first.`
-              : `🍃 Looks like a good day. Start with "${topTask?.title}".`}
-          </Typography>
-        </Paper>
 
         <Paper sx={{ p: 2, mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 1 }}>⚡ Focus Session {lazyMode ? '🌙' : ''}</Typography>
           <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>{formatTime(focusTime)}</Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button variant="contained" onClick={() => setIsFocusRunning((prev) => !prev)}>
               {isFocusRunning ? 'Pause' : 'Start'}
             </Button>
             <Button variant="outlined" onClick={() => { setIsFocusRunning(false); setFocusTime(lazyMode ? 15 * 60 : 25 * 60); }}>
               Reset
             </Button>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel>Focus Sound</InputLabel>
+              <Select value={focusSound} label="Focus Sound" onChange={(e) => setFocusSound(e.target.value)}>
+                <MenuItem value="off">Off</MenuItem>
+                <MenuItem value="brown">🌊 Brown Noise</MenuItem>
+                <MenuItem value="rain">🌧 Rain</MenuItem>
+              </Select>
+            </FormControl>
           </Box>
         </Paper>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">🌿 Your Tasks</Typography>
+          <Typography variant="h6">{content.tasksEmoji} Your Tasks</Typography>
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Sort by</InputLabel>
             <Select value={sortOrder} label="Sort by" onChange={(e) => setSortOrder(e.target.value)}>
@@ -450,11 +541,11 @@ const Dashboard = () => {
           </Box>
         ) : tasks.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 6 }}>
-            <Typography variant="h2">🌱</Typography>
-            <Typography variant="h6" sx={{ mt: 2 }}>Your garden is ready.</Typography>
-            <Typography color="text.secondary">Plant your first task to start growing.</Typography>
+            <Typography variant="h2">{content.emptyStateEmoji}</Typography>
+            <Typography variant="h6" sx={{ mt: 2 }}>{content.emptyStateTitle}</Typography>
+            <Typography color="text.secondary">{content.emptyStateSubtitle}</Typography>
             <Button variant="contained" sx={{ mt: 2 }} onClick={() => navigate('/add-task')}>
-              + Plant a Task
+              {content.emptyStateCta}
             </Button>
           </Box>
         ) : (

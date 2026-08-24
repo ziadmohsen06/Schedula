@@ -1,5 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Session = require('../models/Session');
+
+const SESSION_ACTIVITY_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
 
 const protect = async (req, res, next) => {
   try {
@@ -23,6 +26,23 @@ const protect = async (req, res, next) => {
 
     if (!user) {
       return res.status(401).json({ message: 'User no longer exists' });
+    }
+
+    // Tokens issued before session tracking was added have no jti — grandfather
+    // them through unrevocable until they naturally expire or the user re-logs-in.
+    if (decoded.jti) {
+      const session = await Session.findOne({ tokenId: decoded.jti, user: user._id });
+
+      if (!session || session.revoked) {
+        return res.status(401).json({ message: 'Session expired or revoked. Please log in again.' });
+      }
+
+      if (Date.now() - session.lastActiveAt.getTime() > SESSION_ACTIVITY_UPDATE_INTERVAL_MS) {
+        session.lastActiveAt = new Date();
+        session.save().catch(() => {});
+      }
+
+      req.sessionId = decoded.jti;
     }
 
     req.user = user;

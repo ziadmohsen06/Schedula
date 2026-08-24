@@ -6,9 +6,12 @@ import {
   DialogActions, TextField, Card, CardContent, IconButton,
   Tooltip, Divider, ToggleButton, ToggleButtonGroup
 } from '@mui/material';
+import { useTheme, alpha } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
-import { getTasks, scheduleTask, rescheduleTask } from '../services/api';
+import { getTasks, scheduleTask, rescheduleTask, setTaskScheduleHour } from '../services/api';
 import AppShell from '../components/AppShell';
+import { useThemeName } from '../hooks/useThemeName';
+import { getThemeContent } from '../themeContent';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import ViewDayIcon from '@mui/icons-material/ViewDay';
@@ -49,6 +52,9 @@ const formatHour = (hour) => {
 const CalendarPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const themeName = useThemeName();
+  const content = getThemeContent(themeName);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -95,7 +101,7 @@ const CalendarPage = () => {
     const dateStr = date.toISOString().split('T')[0];
     return tasks.filter(task => {
       if (!task.scheduledDays || task.scheduledDays.length === 0) return false;
-      
+
       const scheduleInfo = task.scheduledDays.find(day => {
         const dayDate = new Date(day.date);
         const dayStr = dayDate.toISOString().split('T')[0];
@@ -103,9 +109,11 @@ const CalendarPage = () => {
       });
 
       if (!scheduleInfo) return false;
-      
-      const priorityHour = getPriorityHour(task.priority);
-      return priorityHour === hour;
+
+      const effectiveHour = scheduleInfo.hour !== undefined && scheduleInfo.hour !== null
+        ? scheduleInfo.hour
+        : getPriorityHour(task.priority);
+      return effectiveHour === hour;
     }).map(task => {
       const scheduleInfo = task.scheduledDays.find(day => {
         const dayDate = new Date(day.date);
@@ -114,6 +122,21 @@ const CalendarPage = () => {
       });
       return { ...task, scheduleInfo };
     });
+  };
+
+  const handleDragStart = (e, task, dateStr) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({ taskId: task._id, dateStr }));
+  };
+
+  const handleDropOnHour = async (e, hour) => {
+    e.preventDefault();
+    try {
+      const { taskId, dateStr } = JSON.parse(e.dataTransfer.getData('application/json'));
+      const { data } = await setTaskScheduleHour(taskId, dateStr, hour);
+      setTasks(tasks.map(t => t._id === taskId ? data.task : t));
+    } catch (err) {
+      setError('Failed to move task to that time slot');
+    }
   };
 
   const getPriorityHour = (priority) => {
@@ -213,14 +236,14 @@ const CalendarPage = () => {
         }
         .calendar-task-card:hover {
           transform: translateY(-4px) scale(1.02) !important;
-          box-shadow: 0 8px 24px rgba(63, 143, 90, 0.25) !important;
+          box-shadow: 0 8px 24px ${alpha(theme.palette.primary.dark, 0.25)} !important;
           z-index: 10;
         }
         .week-cell {
           transition: background-color 0.2s ease;
         }
         .week-cell:hover {
-          background-color: ${darkMode ? 'rgba(105, 195, 125, 0.08)' : 'rgba(105, 195, 125, 0.05)'};
+          background-color: ${alpha(theme.palette.primary.main, darkMode ? 0.08 : 0.05)};
         }
       `}</style>
 
@@ -261,9 +284,9 @@ const CalendarPage = () => {
                 }
               }}
               sx={{
-                background: 'linear-gradient(135deg, #69C37D 0%, #3F8F5A 100%)',
+                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #7DD38F 0%, #4FA56A 100%)',
+                  background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
                 }
               }}
             >
@@ -276,14 +299,15 @@ const CalendarPage = () => {
 
         {/* Unscheduled tasks banner */}
         {getUnscheduledTasks().length > 0 && (
-          <Paper sx={{ 
-            p: 2, 
-            mb: 3, 
-            bgcolor: darkMode ? '#2a1a00' : '#fff8e1', 
-            border: '1px solid #F6C453',
+          <Paper sx={{
+            p: 2,
+            mb: 3,
+            bgcolor: (theme) => alpha(theme.palette.secondary.main, darkMode ? 0.15 : 0.12),
+            border: '1px solid',
+            borderColor: 'secondary.main',
             borderRadius: 2,
           }}>
-            <Typography variant="h6" sx={{ mb: 1, color: darkMode ? '#ffb74d' : '#b25f00' }}>
+            <Typography variant="h6" color="text.primary" sx={{ mb: 1 }}>
               📋 {getUnscheduledTasks().length} task{getUnscheduledTasks().length > 1 ? 's' : ''} without schedule
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -336,11 +360,10 @@ const CalendarPage = () => {
                       p: 1,
                       textAlign: 'center',
                       borderRadius: 2,
-                      bgcolor: isToday(date) 
-                        ? (darkMode ? '#2a4a2a' : '#e8f5e9') 
-                        : (darkMode ? '#1a3320' : '#e8f5e9'),
-                      color: isToday(date) ? '#69C37D' : 'inherit',
-                      border: isToday(date) ? '2px solid #3F8F5A' : 'none',
+                      bgcolor: (theme) => alpha(theme.palette.primary.main, isToday(date) ? 0.2 : 0.12),
+                      color: isToday(date) ? 'primary.main' : 'inherit',
+                      border: isToday(date) ? '2px solid' : 'none',
+                      borderColor: 'primary.dark',
                     }}
                   >
                     <Typography variant="body2" fontWeight="bold">
@@ -383,16 +406,18 @@ const CalendarPage = () => {
                       <Box
                         key={dayIndex}
                         className="week-cell"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => handleDropOnHour(e, hour)}
                         sx={{
                           minHeight: 60,
                           p: 0.5,
                           borderRadius: 1,
-                          bgcolor: dayTasks.length > 0 
+                          bgcolor: dayTasks.length > 0
                             ? getTaskColors(dayTasks[0].priority).bg
-                            : (darkMode ? '#1a1a1a' : '#fafafa'),
-                          border: `1px solid ${dayTasks.length > 0 
+                            : 'action.hover',
+                          border: `1px solid ${dayTasks.length > 0
                             ? getTaskColors(dayTasks[0].priority).border
-                            : (darkMode ? '#333' : '#e0e0e0')}`,
+                            : theme.palette.divider}`,
                           display: 'flex',
                           flexDirection: 'column',
                           gap: 0.5,
@@ -407,14 +432,17 @@ const CalendarPage = () => {
                             <Card
                               key={task._id}
                               className="calendar-task-card"
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, task, date.toISOString().split('T')[0])}
                               onClick={() => handleOpenTaskDetail(task)}
                               sx={{
+                                cursor: 'grab',
                                 animationDelay: `${taskIndex * 0.1}s`,
                                 bgcolor: 'transparent',
                                 boxShadow: 'none',
                                 border: `1px solid ${getTaskColors(task.priority).border}`,
                                 '&:hover': {
-                                  bgcolor: darkMode ? '#2a3a2a' : '#ffffff',
+                                  bgcolor: 'background.paper',
                                 }
                               }}
                             >
@@ -435,7 +463,7 @@ const CalendarPage = () => {
                                   sx={{ 
                                     fontSize: 9, 
                                     display: 'block', 
-                                    color: darkMode ? '#aaa' : 'text.secondary',
+                                    color: 'text.secondary',
                                   }}
                                 >
                                   {task.scheduleInfo?.hoursPerDay} hrs
@@ -466,14 +494,17 @@ const CalendarPage = () => {
                       {formatHour(hour)}
                     </Typography>
                   </Box>
-                  <Box sx={{ 
-                    flex: 1, 
-                    minHeight: 60, 
-                    p: 1, 
-                    borderRadius: 1, 
-                    bgcolor: darkMode ? '#1a1a1a' : '#fafafa', 
-                    border: `1px solid ${darkMode ? '#333' : '#e0e0e0'}` 
-                  }}>
+                  <Box
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDropOnHour(e, hour)}
+                    sx={{
+                      flex: 1,
+                      minHeight: 60,
+                      p: 1,
+                      borderRadius: 1,
+                      bgcolor: 'action.hover',
+                      border: '1px solid', borderColor: 'divider'
+                    }}>
                     {todayTasks.length === 0 ? (
                       <Typography variant="caption" color="text.disabled">—</Typography>
                     ) : (
@@ -481,11 +512,14 @@ const CalendarPage = () => {
                         <Card
                           key={task._id}
                           className="calendar-task-card"
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, task, new Date().toISOString().split('T')[0])}
                           onClick={() => handleOpenTaskDetail(task)}
-                          sx={{ 
-                            mb: 0.5, 
+                          sx={{
+                            mb: 0.5,
+                            cursor: 'grab',
                             bgcolor: getTaskColors(task.priority).bg,
-                            boxShadow: 'none', 
+                            boxShadow: 'none',
                             border: `1px solid ${getTaskColors(task.priority).border}`,
                           }}
                         >
@@ -493,7 +527,7 @@ const CalendarPage = () => {
                             <Typography variant="body2" fontWeight="bold" sx={{ color: getTaskColors(task.priority).text }}>
                               {task.title}
                             </Typography>
-                            <Typography variant="caption" sx={{ color: darkMode ? '#aaa' : 'text.secondary' }}>
+                            <Typography variant="caption" color="text.secondary">
                               {task.scheduleInfo?.hoursPerDay} hrs {task.scheduleInfo?.focus ? `— ${task.scheduleInfo.focus}` : ''}
                             </Typography>
                           </CardContent>
@@ -517,15 +551,13 @@ const CalendarPage = () => {
         PaperProps={{
           sx: {
             borderRadius: 3,
-            bgcolor: darkMode ? '#162418' : '#FCFFFC',
-            backgroundImage: darkMode 
-              ? 'linear-gradient(135deg, #1a3320 0%, #162418 100%)'
-              : 'linear-gradient(135deg, #f0faf0 0%, #FCFFFC 100%)',
+            bgcolor: 'background.paper',
+            backgroundImage: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.12)} 0%, ${theme.palette.background.paper} 100%)`,
           }
         }}
       >
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">🌿 Task Details</Typography>
+          <Typography variant="h6">{content.logoEmoji} Task Details</Typography>
           <IconButton onClick={() => setDetailOpen(false)} size="small">
             <CloseIcon />
           </IconButton>
@@ -570,8 +602,8 @@ const CalendarPage = () => {
                         key={index}
                         sx={{
                           p: 1.5,
-                          bgcolor: darkMode ? '#1a3320' : '#f5f5f5',
-                          borderLeft: '4px solid #69C37D',
+                          bgcolor: 'action.hover',
+                          borderLeft: '4px solid', borderColor: 'primary.main',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
@@ -630,14 +662,12 @@ const CalendarPage = () => {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Choose a start date for <strong>{selectedTaskForSchedule?.title}</strong>. The AI will divide the work across days starting from this date.
           </Typography>
+          <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary' }}>Start Date</Typography>
           <TextField
             type="date"
             fullWidth
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            sx={{ mt: 1 }}
-            InputLabelProps={{ shrink: true }}
-            label="Start Date"
           />
         </DialogContent>
         <DialogActions>

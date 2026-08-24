@@ -16,6 +16,14 @@ const aiRoutes = require('./routes/aiRoutes');
 const twoFactorRoutes = require('./routes/twoFactorRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const digestRoutes = require('./routes/digestRoutes');
+const securityRoutes = require('./routes/securityRoutes');
+const accountRoutes = require('./routes/accountRoutes');
+const courseRoutes = require('./routes/courseRoutes');
+const assignmentRoutes = require('./routes/assignmentRoutes');
+const classScheduleRoutes = require('./routes/classScheduleRoutes');
+const goalRoutes = require('./routes/goalRoutes');
+const habitRoutes = require('./routes/habitRoutes');
+const socialRoutes = require('./routes/socialRoutes');
 const { sendWeeklyDigests } = require('./utils/digest');
 
 connectDB();
@@ -62,6 +70,14 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/2fa', twoFactorRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/digest', digestRoutes);
+app.use('/api/security', securityRoutes);
+app.use('/api/account', accountRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/class-schedule', classScheduleRoutes);
+app.use('/api/goals', goalRoutes);
+app.use('/api/habits', habitRoutes);
+app.use('/api/social', socialRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Schedula API is running' });
