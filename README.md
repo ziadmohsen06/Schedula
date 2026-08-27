@@ -7,6 +7,7 @@ Minimal** — that reskin *everything*: the dashboard, the ambient background, t
 streak/growth visual, decorative elements, marketing copy, the logged-out
 landing page, and even outgoing password-reset and digest emails — not just the
 color palette.
+🎥 **Demo Video:** https://youtu.be/ZHT4esQb1eU
 
 ---
 
