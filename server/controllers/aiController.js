@@ -44,15 +44,32 @@ const isHourBusy = (hour, dayClasses) => dayClasses.some((c) => {
   return hour < end && hour + 1 > start;
 });
 
+// A class only actually applies while the semester is running — before/after
+// that (or if the user never set semester dates) it shouldn't be treated as
+// a recurring-forever conflict.
+const isWithinSemester = (date, semester) => {
+  if (!semester?.startDate && !semester?.endDate) return true;
+  const d = new Date(date); d.setHours(0, 0, 0, 0);
+  if (semester.startDate) {
+    const start = new Date(semester.startDate); start.setHours(0, 0, 0, 0);
+    if (d < start) return false;
+  }
+  if (semester.endDate) {
+    const end = new Date(semester.endDate); end.setHours(0, 0, 0, 0);
+    if (d > end) return false;
+  }
+  return true;
+};
+
 // Picks an hour (7-20, matching the calendar's hour grid) for a scheduled day
 // that doesn't fall inside any of the user's classes that weekday, searching
 // outward from the priority-based preferred hour so the AI-picked slot still
 // leans toward the same time-of-day it would have used anyway. Returns null
 // if every hour that day is class time — the calendar then falls back to its
 // existing priority-hour default, same as any other unscheduled-hour task.
-const findFreeHour = (date, classSlots, priority) => {
+const findFreeHour = (date, classSlots, priority, semester) => {
   const dow = date.getDay();
-  const dayClasses = classSlots.filter((c) => c.dayOfWeek === dow);
+  const dayClasses = isWithinSemester(date, semester) ? classSlots.filter((c) => c.dayOfWeek === dow) : [];
   const preferred = PRIORITY_HOUR_MAP[priority] || 13;
   if (dayClasses.length === 0) return preferred;
   if (!isHourBusy(preferred, dayClasses)) return preferred;
@@ -278,7 +295,7 @@ Total hours across all days must equal ${task.estimatedHours}.`
     const classSlots = await ClassSlot.find({ user: req.user._id });
     task.scheduledDays = scheduledDays.map((day) => ({
       ...day,
-      hour: findFreeHour(new Date(day.date), classSlots, task.priority)
+      hour: findFreeHour(new Date(day.date), classSlots, task.priority, user.semester)
     }));
     await task.save();
 
@@ -367,7 +384,9 @@ const getWorkloadInsights = async (req, res) => {
     });
 
     const days = Array.from(dayTotals.entries()).map(([date, hours]) => {
-      const classHoursToday = Number((classHours.get(dayWeekdays.get(date)) || 0).toFixed(1));
+      const classHoursToday = isWithinSemester(date, user.semester)
+        ? Number((classHours.get(dayWeekdays.get(date)) || 0).toFixed(1))
+        : 0;
       const freeCapacity = Math.max(0, Number((dailyCapacity - classHoursToday).toFixed(1)));
       return {
         date,

@@ -75,6 +75,10 @@ const UserSchema = new mongoose.Schema({
     name: { type: String, enum: ['garden', 'ocean', 'space', 'minimal'], default: 'garden' },
     darkMode: { type: Boolean, default: false }
   },
+  semester: {
+    startDate: { type: Date, default: null },
+    endDate: { type: Date, default: null }
+  },
   createdAt: {
     type: Date,
     default: Date.now

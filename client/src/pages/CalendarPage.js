@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
-import { getTasks, scheduleTask, rescheduleTask, setTaskScheduleHour, getClassSchedule, getAssignments, getGoals } from '../services/api';
+import { getTasks, scheduleTask, rescheduleTask, setTaskScheduleHour, getClassSchedule, getAssignments, getGoals, getSemesterDates } from '../services/api';
 import SchoolIcon from '@mui/icons-material/School';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import FlagIcon from '@mui/icons-material/Flag';
@@ -60,6 +60,7 @@ const CalendarPage = () => {
   const content = getThemeContent(themeName);
   const [tasks, setTasks] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [semester, setSemester] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -91,6 +92,7 @@ const CalendarPage = () => {
     if (!user) return navigate('/login');
     fetchTasks();
     fetchClasses();
+    fetchSemester();
     fetchAssignments();
     fetchGoalMilestones();
   }, [user, navigate]);
@@ -113,6 +115,29 @@ const CalendarPage = () => {
     } catch (err) {
       // non-critical overlay; fail silently
     }
+  };
+
+  const fetchSemester = async () => {
+    try {
+      const { data } = await getSemesterDates();
+      setSemester(data.semester);
+    } catch (err) {
+      // non-critical; classes just render without a date bound
+    }
+  };
+
+  const isWithinSemester = (date) => {
+    if (!semester?.startDate && !semester?.endDate) return true;
+    const d = new Date(date); d.setHours(0, 0, 0, 0);
+    if (semester.startDate) {
+      const start = new Date(semester.startDate); start.setHours(0, 0, 0, 0);
+      if (d < start) return false;
+    }
+    if (semester.endDate) {
+      const end = new Date(semester.endDate); end.setHours(0, 0, 0, 0);
+      if (d > end) return false;
+    }
+    return true;
   };
 
   const fetchAssignments = async () => {
@@ -153,6 +178,7 @@ const CalendarPage = () => {
   };
 
   const getClassesForDateAndHour = (date, hour) => {
+    if (!isWithinSemester(date)) return [];
     const dow = date.getDay();
     return classes.filter((c) => {
       if (c.dayOfWeek !== dow) return false;

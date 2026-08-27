@@ -28,7 +28,9 @@ const {
   getAccountabilityPartner,
   updateAccountabilityPartner,
   getThemePreference,
-  updateThemePreference
+  updateThemePreference,
+  getSemesterDates,
+  updateSemesterDates
 } = authController;
 
 // Public routes
@@ -49,5 +51,7 @@ router.get('/accountability-partner', protect, getAccountabilityPartner);
 router.put('/accountability-partner', protect, updateAccountabilityPartner);
 router.get('/theme', protect, getThemePreference);
 router.put('/theme', protect, updateThemePreference);
+router.get('/semester', protect, getSemesterDates);
+router.put('/semester', protect, updateSemesterDates);
 
 module.exports = router;

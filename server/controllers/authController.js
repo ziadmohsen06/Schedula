@@ -476,6 +476,40 @@ const updateThemePreference = async (req, res) => {
   }
 };
 
+// Semester date range bounds when the user's classes actually apply — the
+// Calendar overlay and AI scheduling's class-conflict avoidance both use this
+// so a class doesn't get treated as recurring forever, before it started or
+// after the term ended.
+const getSemesterDates = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    res.json({ semester: user.semester || { startDate: null, endDate: null } });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to process request' });
+  }
+};
+
+const updateSemesterDates = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body;
+
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      return res.status(400).json({ message: 'End date must be after start date' });
+    }
+
+    const user = await User.findById(req.user._id);
+    user.semester = {
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null
+    };
+    await user.save();
+
+    res.json({ semester: user.semester });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to process request' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -491,5 +525,7 @@ module.exports = {
   getAccountabilityPartner,
   updateAccountabilityPartner,
   getThemePreference,
-  updateThemePreference
+  updateThemePreference,
+  getSemesterDates,
+  updateSemesterDates
 };

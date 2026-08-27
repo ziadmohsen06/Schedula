@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api'
+  baseURL: process.env.REACT_APP_API_URL || 'https://schedula-production-de35.up.railway.app/api'
 });
 
 API.interceptors.request.use((config) => {
@@ -51,7 +51,11 @@ export const updateAssignment = (id, data) => API.patch(`/assignments/${id}`, da
 export const deleteAssignment = (id) => API.delete(`/assignments/${id}`);
 export const getClassSchedule = () => API.get('/class-schedule');
 export const createClassSlot = (data) => API.post('/class-schedule', data);
+export const createClassSlots = (slots) => API.post('/class-schedule/bulk', { slots });
+export const parseSchedulePhoto = (text) => API.post('/class-schedule/parse', { text });
 export const deleteClassSlot = (id) => API.delete(`/class-schedule/${id}`);
+export const getSemesterDates = () => API.get('/auth/semester');
+export const updateSemesterDates = (data) => API.put('/auth/semester', data);
 export const getGoals = () => API.get('/goals');
 export const createGoal = (data) => API.post('/goals', data);
 export const toggleMilestone = (goalId, milestoneId) => API.patch(`/goals/${goalId}/milestones/${milestoneId}`);
