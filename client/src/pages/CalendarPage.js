@@ -13,6 +13,8 @@ import SchoolIcon from '@mui/icons-material/School';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import FlagIcon from '@mui/icons-material/Flag';
 import AppShell from '../components/AppShell';
+import EditTaskDialog from '../components/EditTaskDialog';
+import EditIcon from '@mui/icons-material/Edit';
 import { useThemeName } from '../hooks/useThemeName';
 import { getThemeContent } from '../themeContent';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -67,6 +69,7 @@ const CalendarPage = () => {
   const [error, setError] = useState('');
   const [selectedTask, setSelectedTask] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [startDateDialog, setStartDateDialog] = useState(false);
   const [selectedTaskForSchedule, setSelectedTaskForSchedule] = useState(null);
   const [startDate, setStartDate] = useState('');
@@ -800,6 +803,15 @@ const CalendarPage = () => {
           )}
         </DialogContent>
         <DialogActions>
+          <Button
+            startIcon={<EditIcon />}
+            onClick={() => {
+              setDetailOpen(false);
+              setEditOpen(true);
+            }}
+          >
+            Edit
+          </Button>
           {selectedTask && (!selectedTask.scheduledDays || selectedTask.scheduledDays.length === 0) && (
             <Button
               variant="contained"
@@ -814,6 +826,18 @@ const CalendarPage = () => {
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Edit Task Dialog */}
+      <EditTaskDialog
+        open={editOpen}
+        task={selectedTask}
+        onClose={() => setEditOpen(false)}
+        onSaved={(updated) => {
+          setTasks((prev) => prev.map((t) => (t._id === updated._id ? { ...t, ...updated } : t)));
+          setSelectedTask((prev) => (prev ? { ...prev, ...updated } : prev));
+          fetchTasks();
+        }}
+      />
 
       {/* Start Date Dialog */}
       <Dialog
