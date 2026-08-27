@@ -121,6 +121,58 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
+// Update task (edit title, description, deadline, priority, estimated hours, tags)
+router.patch('/:id', protect, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    if (task.user.toString() !== req.user._id.toString()) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    const { title, description, deadline, priority, estimatedHours, tags } = req.body;
+
+    if (title !== undefined) {
+      if (!String(title).trim()) {
+        return res.status(400).json({ message: 'Title cannot be empty' });
+      }
+      task.title = String(title).trim();
+    }
+    if (description !== undefined) task.description = description;
+    if (deadline !== undefined) {
+      const parsed = new Date(deadline);
+      if (isNaN(parsed.getTime())) {
+        return res.status(400).json({ message: 'Invalid deadline' });
+      }
+      task.deadline = parsed;
+    }
+    if (priority !== undefined) {
+      if (!['low', 'medium', 'high', 'urgent'].includes(priority)) {
+        return res.status(400).json({ message: 'Invalid priority' });
+      }
+      task.priority = priority;
+    }
+    if (estimatedHours !== undefined) {
+      const hours = Number(estimatedHours);
+      if (isNaN(hours) || hours <= 0) {
+        return res.status(400).json({ message: 'Estimated hours must be a positive number' });
+      }
+      task.estimatedHours = hours;
+    }
+    if (tags !== undefined) task.tags = Array.isArray(tags) ? tags : [tags];
+
+    await task.save();
+
+    res.status(200).json({ task });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to update task' });
+  }
+});
+
 // Delete task
 router.delete('/:id', protect, async (req, res) => {
   try {

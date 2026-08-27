@@ -12,7 +12,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import DownloadIcon from '@mui/icons-material/Download';
 import TimerIcon from '@mui/icons-material/Timer';
 import { useAuth } from '../context/AuthContext';
-import { getTasks, deleteTask, scheduleTask, completeTask, rescheduleTask, addTaskNote } from '../services/api';
+import { getTasks, deleteTask, scheduleTask, completeTask, rescheduleTask, addTaskNote, updateTask } from '../services/api';
 import AppShell from '../components/AppShell';
 import FloatingLeaves from '../components/FloatingLeaves';
 import TimeRedistributionDialog from '../components/TimeRedistributionDialog';
@@ -23,6 +23,16 @@ import { TAG_COLORS as tagColors, getTagColor } from '../utils/tagColors';
 
 const priorityColor = { low: 'success', medium: 'warning', high: 'error', urgent: 'error' };
 const priorityWeight = { low: 1, medium: 2, high: 3, urgent: 4 };
+const TAG_OPTIONS = ['University', 'School', 'Test', 'Work', 'Personal', 'Gym', 'Errands', 'Other'];
+
+// "2026-08-27T14:30" for a datetime-local input, in the user's local time
+const toDateTimeLocal = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 const CurrentTasksPage = () => {
   const { user } = useAuth();
@@ -32,6 +42,10 @@ const CurrentTasksPage = () => {
   const [error, setError] = useState('');
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTask, setEditTask] = useState(null);
+  const [editForm, setEditForm] = useState({ title: '', description: '', deadline: '', priority: 'medium', estimatedHours: 1, tags: [] });
+  const [savingEdit, setSavingEdit] = useState(false);
   const [newDeadline, setNewDeadline] = useState('');
   const [newPriority, setNewPriority] = useState('medium');
   const [leafTrigger, setLeafTrigger] = useState(0);
@@ -149,6 +163,41 @@ const CurrentTasksPage = () => {
       setError('Failed to add note');
     } finally {
       setAddingNote(false);
+    }
+  };
+
+  const openEdit = (task) => {
+    setEditTask(task);
+    setEditForm({
+      title: task.title || '',
+      description: task.description || '',
+      deadline: toDateTimeLocal(task.deadline),
+      priority: task.priority || 'medium',
+      estimatedHours: task.estimatedHours ?? 1,
+      tags: task.tags || [],
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editForm.title.trim() || !editForm.deadline) return;
+    setSavingEdit(true);
+    try {
+      await updateTask(editTask._id, {
+        title: editForm.title.trim(),
+        description: editForm.description,
+        deadline: new Date(editForm.deadline).toISOString(),
+        priority: editForm.priority,
+        estimatedHours: Number(editForm.estimatedHours),
+        tags: editForm.tags.length ? editForm.tags : ['Other'],
+      });
+      await fetchTasks();
+      setEditOpen(false);
+      setEditTask(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update task');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -458,6 +507,9 @@ const CurrentTasksPage = () => {
                     >
                       Focus
                     </Button>
+                    <Button size="small" color="inherit" onClick={() => openEdit(task)}>
+                      ✏️ Edit
+                    </Button>
                     {deadlineStatus.isOverdue && (
                       <Button size="small" color="warning" onClick={() => openReschedule(task)}>
                         Reschedule
@@ -515,6 +567,91 @@ const CurrentTasksPage = () => {
           </Paper>
         )}
       </Container>
+
+      {/* Edit Task Dialog */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Task</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Title"
+              fullWidth
+              value={editForm.title}
+              onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+              required
+              error={!editForm.title.trim()}
+              helperText={!editForm.title.trim() ? 'Title is required' : ''}
+            />
+            <TextField
+              label="Description"
+              fullWidth
+              multiline
+              minRows={2}
+              value={editForm.description}
+              onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+            />
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>Deadline</Typography>
+              <TextField
+                type="datetime-local"
+                fullWidth
+                value={editForm.deadline}
+                onChange={(e) => setEditForm((f) => ({ ...f, deadline: e.target.value }))}
+                required
+              />
+            </Box>
+            <FormControl fullWidth>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={editForm.priority}
+                label="Priority"
+                onChange={(e) => setEditForm((f) => ({ ...f, priority: e.target.value }))}
+              >
+                <MenuItem value="low">Low</MenuItem>
+                <MenuItem value="medium">Medium</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+                <MenuItem value="urgent">Urgent</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Estimated Hours"
+              type="number"
+              fullWidth
+              inputProps={{ min: 0.5, step: 0.5 }}
+              value={editForm.estimatedHours}
+              onChange={(e) => setEditForm((f) => ({ ...f, estimatedHours: e.target.value }))}
+            />
+            <FormControl fullWidth>
+              <InputLabel>Tags</InputLabel>
+              <Select
+                multiple
+                value={editForm.tags}
+                label="Tags"
+                onChange={(e) => setEditForm((f) => ({ ...f, tags: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value }))}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => <Chip key={value} label={value} size="small" />)}
+                  </Box>
+                )}
+              >
+                {TAG_OPTIONS.map((tag) => (
+                  <MenuItem key={tag} value={tag}>{tag}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleEditSave}
+            disabled={savingEdit || !editForm.title.trim() || !editForm.deadline}
+          >
+            {savingEdit ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Reschedule Dialog */}
       <Dialog open={rescheduleOpen} onClose={() => setRescheduleOpen(false)} maxWidth="sm" fullWidth>

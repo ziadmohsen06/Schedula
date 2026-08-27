@@ -38,6 +38,7 @@ export const createTask = (data) => API.post('/tasks', data);
 export const deleteTask = (id, { series } = {}) => API.delete(`/tasks/${id}`, { params: series ? { series: true } : undefined });
 export const completeTask = (id) => API.patch(`/tasks/${id}/complete`);
 export const rescheduleTask = (id, data) => API.patch(`/tasks/${id}/reschedule`, data);
+export const updateTask = (id, data) => API.patch(`/tasks/${id}`, data);
 export const scheduleTask = (id) => API.post(`/ai/schedule/${id}`);
 export const getWorkloadInsights = () => API.get('/ai/workload');
 export const getCourses = () => API.get('/courses');
