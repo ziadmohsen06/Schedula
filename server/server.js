@@ -56,7 +56,9 @@ const authLimiter = rateLimit({
 app.use('/api/auth/login', authLimiter);
 
 app.use(cors({
-  origin: ['https://schedula-green.vercel.app', 'http://localhost:3000'],
+  origin: function(origin, callback) {
+    callback(null, true);
+  },
   credentials: true
 }));
 app.use(express.json());
